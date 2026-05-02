@@ -1,6 +1,6 @@
 // Boodschappenlijst v0.6: prototype-stijl met 4-kolom hero + filter-chips + winkel-cards.
 import { html, nothing } from 'lit-html';
-import { todayInfo, formatWeekRange } from '../lib/datums.js';
+import { todayInfo, formatWeekRange, formatWeekRangeCompact } from '../lib/datums.js';
 import { listProfiles, getWeek, getWeekMeals,
          getShoppingList, createShoppingList, updateShoppingList, deleteShoppingList,
          listOpenNotes, addNote, dismissNote, markNoteAdded,
@@ -259,9 +259,9 @@ export function ShoppingView(state) {
 
       <div class="hero-row">
         <div class="hero-card hero-dark hero-totaal">
-          <div class="cmt">// totaal</div>
-          <div class="display">${totalCount}</div>
-          <div class="lead">items voor week ${vs.week}</div>
+          <div class="cmt">week</div>
+          <div class="display">${vs.week}</div>
+          <div class="lead">${formatWeekRangeCompact(vs.year, vs.week)}</div>
         </div>
         <div class="hero-card hero-checked">
           <div class="cmt">// afgevinkt</div>
@@ -516,11 +516,16 @@ export function ShoppingView(state) {
       }
       @media (max-width: 720px) {
         .hero-row { display: contents; }
-        .hero-card { display: flex; flex-direction: column; gap: 4px; }
-        .hero-card .display { font-size: 32px; }
+        .hero-card { display: flex; flex-direction: column; gap: 2px; }
+        .hero-card .display { font-size: 28px; line-height: 1; }
         .modus-display { font-size: 22px; }
-        /* Alle hero-cards naar onderen op mobiel; volgorde Totaal → Afgevinkt → Modus → Acties */
-        .hero-totaal  { order: 99; }
+
+        /* Totaal-card compact bovenaan; rest naar onderen */
+        .hero-totaal  { order: -1; padding: 12px 16px; }
+        .hero-totaal .display { font-size: 32px; }
+        .hero-totaal .lead { font-size: 12px; opacity: 0.8; }
+        .hero-totaal .cmt { font-size: 10px; }
+
         .hero-checked { order: 100; }
         .hero-modus   { order: 101; }
         .hero-acties  { order: 102; }

@@ -49,6 +49,19 @@ export function formatWeekRange(year, week) {
   return `${formatDate(first)} t/m ${formatDate(last)} ${last.getUTCFullYear()}`;
 }
 
+// Compacte vorm met dag-aanduiding: "ma 4 t/m zo 10 mei"
+export function formatWeekRangeCompact(year, week) {
+  const dates = weekDates(year, week);
+  const first = dates[0];
+  const last = dates[6];
+  const sameMonth = first.getUTCMonth() === last.getUTCMonth();
+  const firstPart = sameMonth
+    ? `ma ${first.getUTCDate()}`
+    : `ma ${first.getUTCDate()} ${MAANDEN_KORT[first.getUTCMonth()]}`;
+  const lastPart = `zo ${last.getUTCDate()} ${MAANDEN_KORT[last.getUTCMonth()]}`;
+  return `${firstPart} t/m ${lastPart}`;
+}
+
 // "Vandaag" = welk dag-nummer (1=ma .. 7=zo) in welke ISO-week
 export function todayInfo() {
   const now = new Date();
