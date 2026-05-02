@@ -321,6 +321,56 @@ export async function importWeek({ ownerId, year, week, source = 'dietist', pdfP
 }
 
 // ============================================================
+// shopping_notes (snelle noties → beslissen of ze op de lijst komen)
+// ============================================================
+
+export async function listOpenNotes() {
+  const { data, error } = await supabase
+    .from('shopping_notes')
+    .select('id, owner, name, qty, unit, status, created_at, profiles:profiles!owner(slug, naam)')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addNote({ ownerId, name, qty = null, unit = null }) {
+  const { data, error } = await supabase
+    .from('shopping_notes')
+    .insert({ owner: ownerId, name: name.trim(), qty, unit })
+    .select()
+    .single();
+  if (error) throw error;
+  notify('shopping_notes');
+  return data;
+}
+
+export async function dismissNote(id) {
+  const { error } = await supabase
+    .from('shopping_notes')
+    .update({ status: 'dismissed', updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+  notify('shopping_notes');
+}
+
+export async function deleteNote(id) {
+  const { error } = await supabase.from('shopping_notes').delete().eq('id', id);
+  if (error) throw error;
+  notify('shopping_notes');
+}
+
+// Markeer notitie als 'added' (vermeld welke shopping_list hem opnam, optioneel).
+export async function markNoteAdded(id, shoppingListId = null) {
+  const { error } = await supabase
+    .from('shopping_notes')
+    .update({ status: 'added', added_to_list_id: shoppingListId, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+  notify('shopping_notes');
+}
+
+// ============================================================
 // PDF storage (private bucket 'dietist-pdfs')
 // ============================================================
 

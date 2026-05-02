@@ -88,6 +88,23 @@ create table if not exists public.shopping_lists (
 create index if not exists shopping_lists_owner_idx on public.shopping_lists (owner);
 
 -- ============================================================
+-- 5b. shopping_notes  (snelle noties door de week, beslissen of ze op de lijst komen)
+-- ============================================================
+create table if not exists public.shopping_notes (
+  id               uuid primary key default gen_random_uuid(),
+  owner            uuid not null references public.profiles(id) on delete cascade,
+  name             text not null,
+  qty              numeric(7,2),
+  unit             text,
+  status           text not null default 'open' check (status in ('open','added','dismissed')),
+  added_to_list_id uuid references public.shopping_lists(id) on delete set null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+create index if not exists shopping_notes_status_idx on public.shopping_notes (status, created_at desc);
+create index if not exists shopping_notes_owner_idx  on public.shopping_notes (owner);
+
+-- ============================================================
 -- 6. RLS — Row Level Security
 -- ============================================================
 alter table public.profiles       enable row level security;

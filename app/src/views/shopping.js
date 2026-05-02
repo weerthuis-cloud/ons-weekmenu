@@ -3,7 +3,9 @@ import { html, nothing } from 'lit-html';
 import { todayInfo, formatWeekRange } from '../lib/datums.js';
 import { listProfiles, getWeek, getWeekMeals,
          getShoppingList, createShoppingList, updateShoppingList, deleteShoppingList,
+         listOpenNotes, addNote, dismissNote, markNoteAdded,
          onDataChange } from '../lib/data.js';
+import { classifyIngredient } from '../lib/categorie.js';
 import { aggregateShopping, groupByCategory, groupByStore, itemKey } from '../lib/shopping.js';
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
@@ -28,6 +30,10 @@ const vs = {
   items: [],
   initialized: false,
   editingKey: null,     // itemKey van item dat momenteel in qty-edit mode staat
+  // Notities
+  notes: [],
+  noteInput: '',
+  notesOpen: true,
 };
 
 function ensureInit() {
@@ -38,8 +44,70 @@ function ensureInit() {
   vs.initialized = true;
   onDataChange((scope) => {
     if (scope === 'shopping_lists' || scope === 'meals' || scope === 'week_meals' || scope === 'weeks') loadAll();
+    if (scope === 'shopping_notes') loadNotes();
   });
   queueMicrotask(loadAll);
+  queueMicrotask(loadNotes);
+}
+
+async function loadNotes() {
+  try { vs.notes = await listOpenNotes(); rerender(); }
+  catch (err) { vs.error = err.message; rerender(); }
+}
+
+async function submitNote(e) {
+  e?.preventDefault?.();
+  const txt = vs.noteInput.trim();
+  if (!txt) return;
+  try {
+    await addNote({ ownerId: appState.auth.profile.id, name: txt });
+    vs.noteInput = '';
+    await loadNotes();
+  } catch (err) { vs.error = err.message; rerender(); }
+}
+
+async function noteToList(note) {
+  // Voeg note toe als nieuw item in de huidige shopping_list (of maak aan).
+  const newItem = {
+    name: note.name,
+    qty: note.qty,
+    unit: note.unit || '',
+    store: '',
+    category: classifyIngredient(note.name.toLowerCase()),
+    who: [],
+    partial: false,
+    variants: [note.name],
+    sources: [{ noteId: note.id, addedBy: 'manual' }],
+    checked: false,
+    manual: true,
+  };
+  const weekIds = activeWeekIds();
+  if (vs.list) {
+    const next = [...vs.items, newItem];
+    vs.list = await updateShoppingList({ id: vs.list.id, items: next });
+    vs.items = vs.list.items;
+  } else if (weekIds.length > 0) {
+    vs.list = await createShoppingList({
+      ownerId: appState.auth.profile.id, weekIds, items: [newItem],
+    });
+    vs.items = vs.list.items;
+  } else {
+    vs.error = 'Maak eerst een lijst aan (Genereer) voor je notities kunt toevoegen.';
+    rerender();
+    return;
+  }
+  await markNoteAdded(note.id, vs.list.id);
+  await loadNotes();
+}
+
+async function noteDismiss(note) {
+  await dismissNote(note.id);
+  await loadNotes();
+}
+
+function toggleNotesPanel() {
+  vs.notesOpen = !vs.notesOpen;
+  rerender();
 }
 
 async function loadWeeksAndMeals() {
@@ -177,6 +245,8 @@ export function ShoppingView(state) {
 
   return html`
     <section class="view-wrap shopview">
+      ${renderNotesPanel()}
+
       <div class="hero-row">
         <div class="hero-card hero-dark">
           <div class="cmt">// totaal</div>
@@ -366,6 +436,49 @@ export function ShoppingView(state) {
       .qty-edit-input:focus { outline: none; }
       .qty-unit { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-left: -4px; }
 
+      .notes-panel {
+        background: var(--mustard-tint);
+        border: 1px solid oklch(85% 0.08 85);
+        border-radius: var(--r-lg);
+        padding: 14px 18px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .notes-head {
+        display: flex; align-items: center; justify-content: space-between;
+        cursor: pointer;
+      }
+      .notes-meta { display: flex; align-items: center; gap: 8px; }
+      .notes-meta .badge {
+        background: var(--ink); color: var(--bg);
+        font-size: 11px; font-weight: 700;
+        padding: 2px 8px; border-radius: 999px;
+        font-family: var(--mono);
+      }
+      .notes-meta .caret { color: oklch(40% 0.10 85); }
+
+      .notes-input { display: flex; gap: 8px; }
+      .notes-input input {
+        flex: 1; font: inherit; padding: 8px 12px;
+        border-radius: var(--r-md);
+        border: 1px solid oklch(80% 0.08 85);
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .notes-input input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+      .notes-input .btn { white-space: nowrap; }
+
+      .notes-empty { margin: 4px 0; color: oklch(35% 0.10 85); }
+      .notes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+      .note-row {
+        background: var(--bg);
+        border-radius: var(--r-sm);
+        padding: 8px 10px;
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px;
+      }
+      .note-row .note-name { font-weight: 600; }
+      .note-row .btn.small { height: 26px; padding: 0 8px; font-size: 11px; }
+
       .person-tag {
         display: inline-block;
         padding: 1px 6px;
@@ -397,6 +510,48 @@ export function ShoppingView(state) {
         .item-row { padding: 4px 0; }
       }
     </style>
+  `;
+}
+
+function renderNotesPanel() {
+  const count = vs.notes.length;
+  return html`
+    <div class="notes-panel ${vs.notesOpen ? '' : 'collapsed'}">
+      <div class="notes-head" @click=${toggleNotesPanel}>
+        <div class="cmt">// notities — losse boodschappen die je deze week tegenkomt</div>
+        <div class="notes-meta">
+          ${count > 0 ? html`<span class="badge">${count}</span>` : ''}
+          <span class="caret">${vs.notesOpen ? '▾' : '▸'}</span>
+        </div>
+      </div>
+      ${vs.notesOpen ? html`
+        <form class="notes-input" @submit=${submitNote}>
+          <input
+            type="text"
+            placeholder="bv. kaas, koffiefilters, wc-papier"
+            .value=${vs.noteInput}
+            @input=${(e) => { vs.noteInput = e.target.value; }}
+          />
+          <button class="btn" type="submit" ?disabled=${!vs.noteInput.trim()}>+ noteer</button>
+        </form>
+
+        ${count === 0 ? html`
+          <p class="notes-empty cmt">Nog geen open notities. Tik er één in als je iets tegenkomt.</p>
+        ` : html`
+          <ul class="notes-list">
+            ${vs.notes.map(n => html`
+              <li class="note-row">
+                <span class="note-name">${n.name}</span>
+                ${n.profiles?.naam ? html`<span class="cmt">door ${n.profiles.naam}</span>` : ''}
+                <span style="flex:1"></span>
+                <button class="btn ghost small" @click=${() => noteToList(n)} title="naar boodschappenlijst">✓ naar lijst</button>
+                <button class="btn ghost small" @click=${() => noteDismiss(n)} title="weg">×</button>
+              </li>
+            `)}
+          </ul>
+        `}
+      ` : ''}
+    </div>
   `;
 }
 
