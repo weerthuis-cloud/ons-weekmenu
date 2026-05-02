@@ -20,12 +20,12 @@ const VIEW_MAP = {
 };
 
 const NAV_ITEMS = [
-  { id: 'week',    label: 'Week' },
-  { id: 'dag',     label: 'Vandaag' },
-  { id: 'lijst',   label: 'Boodschappen' },
-  { id: 'archief', label: 'Bibliotheek' },
-  { id: 'maker',   label: 'Stel zelf samen' },
-  { id: 'import',  label: 'Import' },
+  { id: 'week',    label: 'Week',         mobileShow: true  },
+  { id: 'dag',     label: 'Vandaag',      mobileShow: true  },
+  { id: 'lijst',   label: 'Boodschappen', mobileShow: true  },
+  { id: 'archief', label: 'Bibliotheek',  mobileShow: false },
+  { id: 'maker',   label: 'Stel zelf samen', mobileShow: false },
+  { id: 'import',  label: 'Import',       mobileShow: false },
 ];
 
 const PERSONEN = [
@@ -49,7 +49,8 @@ export function Shell(state, actions) {
 
       <nav class="nav-pills" aria-label="Schermen">
         ${NAV_ITEMS.map(i => html`
-          <a href="#${i.id}" class="pill ${state.route === i.id ? 'is-on' : ''}">${i.label}</a>
+          <a href="#${i.id}"
+             class="pill ${state.route === i.id ? 'is-on' : ''} ${i.mobileShow ? '' : 'desktop-only'}">${i.label}</a>
         `)}
       </nav>
 
@@ -141,6 +142,7 @@ export function Shell(state, actions) {
         .brand-title { font-size: 18px; }
         .pill { padding: 6px 12px; font-size: 12px; }
         .persoon-toggle .chip { height: 26px; font-size: 11px; }
+        .pill.desktop-only { display: none; }
       }
     </style>
   `;
