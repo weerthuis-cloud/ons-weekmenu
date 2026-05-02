@@ -8,7 +8,6 @@ import { ShoppingView } from './views/shopping.js';
 import { LibraryView }  from './views/library.js';
 import { BuildView }    from './views/build.js';
 import { ImportView }   from './views/import.js';
-import { todayInfo } from './lib/datums.js';
 
 const VIEW_MAP = {
   week:    WeekView,
@@ -37,8 +36,8 @@ const PERSONEN = [
 export function Shell(state, actions) {
   const View = VIEW_MAP[state.route] || WeekView;
   const profile = state.auth.profile;
-  const today = todayInfo();
   const initials = (profile?.naam || '?').slice(0, 2).toUpperCase();
+  const weekLabel = state.viewWeek ?? '?';
 
   return html`
     <header class="topbar">
@@ -55,7 +54,7 @@ export function Shell(state, actions) {
       </nav>
 
       <div class="topbar-right">
-        <span class="cmt week-info">// week ${today.week} · huishouden ${profile?.naam ?? '?'}</span>
+        <span class="cmt week-info">// week ${weekLabel} · huishouden ${profile?.naam ?? '?'}</span>
         <div class="persoon-toggle" role="tablist" aria-label="Welk menu">
           ${PERSONEN.map(p => html`
             <button

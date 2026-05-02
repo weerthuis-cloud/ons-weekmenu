@@ -7,7 +7,7 @@ import { openMealPicker } from '../components/meal-picker.js';
 import { openMealDetail } from '../components/meal-detail.js';
 import { SlotIcon } from '../components/slot-icon.js';
 import { chipForSlot, SLOT_VISUAL, SLOT_TIME } from '../lib/cat.js';
-import { rerender } from '../main.js';
+import { rerender, actions as appActions } from '../main.js';
 
 const vs = {
   year: null,
@@ -30,6 +30,7 @@ function ensureInit() {
   vs.initialized = true;
   onDataChange(() => loadAll());
   queueMicrotask(loadAll);
+  appActions.setViewWeek(vs.year, vs.week);
 }
 
 async function loadAll() {
@@ -59,6 +60,7 @@ function changeDay(delta) {
   if (d < 1) { d = 7; w -= 1; if (w < 1) { w = 52; y -= 1; } }
   if (d > 7) { d = 1; w += 1; if (w > 52) { w = 1; y += 1; } }
   vs.day = d; vs.week = w; vs.year = y;
+  appActions.setViewWeek(vs.year, vs.week);
   loadAll();
 }
 

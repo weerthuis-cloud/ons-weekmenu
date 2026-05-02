@@ -9,7 +9,7 @@ import { MealCard } from '../components/meal-card.js';
 import { Sparkline } from '../components/sparkline.js';
 import { SlotIcon } from '../components/slot-icon.js';
 import { hueForSlot, chipForSlot, SLOT_VISUAL } from '../lib/cat.js';
-import { rerender } from '../main.js';
+import { rerender, actions as appActions } from '../main.js';
 import { setRoute } from '../router.js';
 
 // view-state
@@ -32,6 +32,7 @@ function ensureInit() {
   vs.initialized = true;
   onDataChange(() => loadAll());
   queueMicrotask(loadAll);
+  appActions.setViewWeek(vs.year, vs.week);
 }
 
 async function loadAll() {
@@ -66,6 +67,7 @@ function changeWeek(delta) {
   vs.week += delta;
   if (vs.week < 1) { vs.week = 52; vs.year -= 1; }
   else if (vs.week > 52) { vs.week = 1; vs.year += 1; }
+  appActions.setViewWeek(vs.year, vs.week);
   loadAll();
 }
 
@@ -73,6 +75,7 @@ export function gotoWeek(year, week) {
   ensureInit();
   vs.year = year;
   vs.week = week;
+  appActions.setViewWeek(vs.year, vs.week);
   loadAll();
 }
 
@@ -157,7 +160,7 @@ export function WeekView(state) {
         <h2 class="display">De week in één oogopslag</h2>
         <div class="week-nav">
           <button class="chip" @click=${() => changeWeek(-1)}>← Week ${vs.week - 1 || 52}</button>
-          <button class="chip is-on" @click=${() => { const t = todayInfo(); vs.year=t.year; vs.week=t.week; loadAll(); }}>
+          <button class="chip is-on" @click=${() => { const t = todayInfo(); vs.year=t.year; vs.week=t.week; appActions.setViewWeek(vs.year, vs.week); loadAll(); }}>
             Week ${vs.week}
           </button>
           <button class="chip" @click=${() => changeWeek(1)}>Week ${vs.week + 1 > 52 ? 1 : vs.week + 1} →</button>

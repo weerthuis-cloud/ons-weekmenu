@@ -5,12 +5,19 @@ import { LoginView } from './views/login.js';
 import { OnboardingView } from './views/onboarding.js';
 import { initRouter, getRoute } from './router.js';
 import { initAuth, onAuthChange, getAuthState, signOut } from './lib/auth.js';
+import { todayInfo } from './lib/datums.js';
+
+const _today = todayInfo();
 
 export const state = {
   route: getRoute(),
   persoon: localStorage.getItem('weekmenu.persoon') || 'beiden',
   density: localStorage.getItem('weekmenu.density') || 'comfortable',
   auth: getAuthState(), // referentie naar reactieve state
+  // viewWeek = de week die actief in WeekView/DayView/ShoppingView wordt getoond.
+  // Views updaten dit bij navigatie. Shell leest het voor de header-info.
+  viewYear: _today.year,
+  viewWeek: _today.week,
 };
 
 const root = document.getElementById('app');
@@ -51,6 +58,11 @@ export const actions = {
   setDensity(d) {
     state.density = d;
     localStorage.setItem('weekmenu.density', d);
+    rerender();
+  },
+  setViewWeek(year, week) {
+    state.viewYear = year;
+    state.viewWeek = week;
     rerender();
   },
   signOut() {

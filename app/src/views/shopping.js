@@ -10,7 +10,7 @@ import { aggregateShopping, groupByCategory, groupByStore, itemKey } from '../li
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { Checkbox } from '../components/checkbox.js';
-import { rerender, state as appState } from '../main.js';
+import { rerender, state as appState, actions as appActions } from '../main.js';
 
 const STORE_HUE = {
   '': 80, ah: 240, jumbo: 130, plus: 28, lidl: 200, aldi: 200, markt: 145, biologisch: 145, anders: 80,
@@ -48,6 +48,7 @@ function ensureInit() {
   });
   queueMicrotask(loadAll);
   queueMicrotask(loadNotes);
+  appActions.setViewWeek(vs.year, vs.week);
 }
 
 async function loadNotes() {
@@ -224,6 +225,7 @@ function changeWeek(delta) {
   vs.week += delta;
   if (vs.week < 1) { vs.week = 52; vs.year -= 1; }
   else if (vs.week > 52) { vs.week = 1; vs.year += 1; }
+  appActions.setViewWeek(vs.year, vs.week);
   loadAll();
 }
 
@@ -556,7 +558,6 @@ function renderNotesPanel() {
 }
 
 function renderCategoryCard(group, allItems) {
-  const showWhoTags = vs.modus === 'huishouden';
   return html`
     <div class="store-card">
       <div class="store-head">
@@ -603,12 +604,10 @@ function renderCategoryCard(group, allItems) {
                     : html`<span class="qty-empty">+ qty</span>`}
                 </button>
               `}
-              ${showWhoTags ? html`
-                <span class="who">
-                  ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
-                  ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
-                </span>
-              ` : ''}
+              <span class="who">
+                ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
+                ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
+              </span>
             </li>
           `;
         })}
