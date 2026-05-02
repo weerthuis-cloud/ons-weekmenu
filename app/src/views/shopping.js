@@ -560,9 +560,9 @@ function renderNotesPanel() {
             type="text"
             placeholder="bv. kaas, koffiefilters, wc-papier"
             .value=${vs.noteInput}
-            @input=${(e) => { vs.noteInput = e.target.value; }}
+            @input=${(e) => { vs.noteInput = e.target.value; rerender(); }}
           />
-          <button class="btn" type="submit" ?disabled=${!vs.noteInput.trim()}>+ noteer</button>
+          <button class="btn" type="submit">+ noteer</button>
         </form>
 
         ${count === 0 ? html`
