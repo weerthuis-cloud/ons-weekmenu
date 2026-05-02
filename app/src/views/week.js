@@ -234,11 +234,16 @@ export function WeekView(state) {
         background: var(--bg);
         color: var(--ink);
         border-radius: var(--r-md);
-        padding: 12px;
+        padding: 14px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 12px;
         border: 1px solid var(--line);
+      }
+      .day-col .slots {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
       .day-col.today { background: var(--ink); color: var(--bg); border-color: var(--ink); }
       .day-col.today .cmt { color: var(--bg); opacity: 0.7; }
@@ -329,7 +334,7 @@ export function WeekView(state) {
         .week-grid { grid-template-columns: 1fr; gap: 8px; }
         .day-col { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: start; }
         .day-col .day-head { flex-direction: column; align-items: flex-start; gap: 0; margin: 0; }
-        .day-col .slots { display: flex; flex-direction: column; gap: 6px; grid-column: 2; }
+        .day-col .slots { display: flex; flex-direction: column; gap: 8px; grid-column: 2; }
         .day-head { grid-column: 1; }
       }
     </style>
@@ -417,6 +422,9 @@ function renderDayColumn(day, date, today, isCurrentWeek, persoon) {
 }
 
 function renderSlotCell(day, slot, persoon) {
+  // Persoon-tag tonen alleen in 'beiden'-modus, want bij 'peter' of 'miranda' weet je al wie het is.
+  const showPerson = persoon === 'beiden';
+
   if (persoon === 'beiden') {
     const p = findMeal('peter', day, slot.id);
     const m = findMeal('miranda', day, slot.id);
@@ -425,8 +433,8 @@ function renderSlotCell(day, slot, persoon) {
     }
     return html`
       <div class="slot-cell">
-        ${p ? renderMiniCard('peter', p, day, slot.id) : ''}
-        ${m ? renderMiniCard('miranda', m, day, slot.id) : ''}
+        ${p ? renderMiniCard('peter', p, day, slot.id, true) : ''}
+        ${m ? renderMiniCard('miranda', m, day, slot.id, true) : ''}
       </div>
     `;
   }
@@ -435,16 +443,15 @@ function renderSlotCell(day, slot, persoon) {
   if (!wm) {
     return html`<button class="slot-add" @click=${() => openPicker(persoon, day, slot.id)}>+</button>`;
   }
-  return renderMiniCard(persoon, wm, day, slot.id);
+  return renderMiniCard(persoon, wm, day, slot.id, false);
 }
 
-function renderMiniCard(slug, wm, day, slot) {
-  const slotInfo = SLOT_VISUAL[slot];
+function renderMiniCard(slug, wm, day, slot, showPerson = false) {
   return html`
     <div class="meal-mini" @click=${() => openPicker(slug, day, slot)}>
       <div class="ph-row">
         ${SlotIcon({ slot, size: 14 })}
-        ${slug ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
+        ${showPerson ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
       </div>
       <span class="name">${wm.meal.name}</span>
       ${wm.meal.kcal ? html`<span class="cmt">${wm.meal.kcal}k</span>` : ''}
