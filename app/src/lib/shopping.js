@@ -1,11 +1,47 @@
 // Boodschappenlijst-aggregatie: van week_meals naar afvinkbare lijst.
-// Groepeert per (naam + unit-base + winkel), sommeert hoeveelheden,
+// Groepeert per (genormaliseerde-naam + unit-base + winkel), sommeert hoeveelheden,
 // houdt 'who' bij (welke personen hebben dit nodig).
 
 import { aggKey } from './units.js';
 
+// Bereidingswijzen die genegeerd worden bij groeperen ("Ei, gebakken" → "Ei").
+const BEREIDING_RE = /\b(gebakken|gekookt|gefruit|gegrild|geroosterd|gestoomd|gepocheerd|rauwe?|magere|volle|halfvolle|mager|vol|halfvol)\b/gi;
+const NAAR_KEUZE_RE = /\bnaar keuze\b/gi;
+const STORE_HINT_RE = /\bin\s+(olijfolie|boter|zonnebloemolie|water)\b/gi;
+
+/**
+ * Normaliseer een ingrediënt-naam voor groepering in de boodschappenlijst.
+ * "Ei (omelet)" / "Ei, gebakken" / "Ei, gekookt" → "ei"
+ * "Honing" / "Honing (rauwe)" → "honing"
+ * "Kwark, volle" / "Kwark, magere" → "kwark"
+ */
 function normalizeName(name) {
-  return (name || '').trim().toLowerCase();
+  let n = (name || '').trim();
+
+  // 1. Strip parenthese-suffix: "Ei (omelet)", "Beleg (voor 2 sneetjes)"
+  n = n.replace(/\s*\([^)]*\)\s*/g, ' ');
+
+  // 2. Strip bereidingswijzes en bijwoorden
+  n = n.replace(BEREIDING_RE, '');
+  n = n.replace(NAAR_KEUZE_RE, '');
+  n = n.replace(STORE_HINT_RE, '');
+
+  // 3. Strip alle leestekens behalve / (voor "blauwe bessen/frambozen")
+  n = n.replace(/[,;]/g, '');
+
+  // 4. Whitespace normaliseren
+  n = n.replace(/\s+/g, ' ').trim();
+
+  return n.toLowerCase();
+}
+
+// Display-naam = genormaliseerde key met hoofdletter.
+// Als alle varianten exact gelijk zijn, gebruik die origineel (behoud "Blauwe bessen/frambozen").
+function chooseDisplayName(variants, normalizedKey) {
+  const arr = Array.from(variants);
+  if (arr.length === 1) return arr[0];
+  // Bij meerdere varianten: gebruik de pure genormaliseerde naam met hoofdletter.
+  return normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
 }
 
 /**
@@ -26,12 +62,14 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
       for (const ing of ingredients) {
         if (!ing?.name) continue;
         const nameKey = normalizeName(ing.name);
+        if (!nameKey) continue; // overgeslagen als naam helemaal weg-gestript wordt
         const unitKey = aggKey(ing.unit);
         const storeKey = ing.store || '';
         const key = `${nameKey}::${unitKey}::${storeKey}`;
         if (!groups.has(key)) {
           groups.set(key, {
-            name: ing.name.trim(),
+            nameKey,
+            variants: new Set(),
             qty: 0,
             qtyMissing: false,
             unit: unitKey,
@@ -48,7 +86,8 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
           g.qty = (g.qty || 0) + Number(ing.qty) * u * porties;
         }
         g.who.add(slug);
-        g.sources.push({ slug, day: wm.day, slot: wm.slot, mealName: wm.meal?.name });
+        g.variants.add(ing.name.trim());
+        g.sources.push({ slug, day: wm.day, slot: wm.slot, mealName: wm.meal?.name, originalName: ing.name });
       }
     }
   }
@@ -56,12 +95,13 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
   // Convert naar array, sorteer per winkel + naam
   return Array.from(groups.values())
     .map(g => ({
-      name: g.name,
+      name: chooseDisplayName(g.variants, g.nameKey),
       qty: g.qty > 0 ? g.qty : null,
       unit: g.unit,
       store: g.store,
       who: Array.from(g.who),
       partial: g.qtyMissing && g.qty > 0,
+      variants: Array.from(g.variants),
       sources: g.sources,
     }))
     .sort((a, b) => {
