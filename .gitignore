@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+app/dist/
+
+# Vite tijdelijke build-artefacten
+**/vite.config.js.timestamp-*
+**/vite.config.ts.timestamp-*
+
+# Env-files met secrets
+.env.local
+.env.*.local
+**/.env.local
+
+# Editor / OS junk
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Sandbox / Cowork artefacten
+prototype_extract/
+pdf_dump.json
+pdf_words.json
+weekmenu_dist*/
+
+# Niet op GitHub: backup-PDF's met persoonlijke data
+*.pdf

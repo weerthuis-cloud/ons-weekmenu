@@ -1,0 +1,22 @@
+{
+  "name": "ons-weekmenu",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Weekmenu-app voor het huishouden van Peter en Miranda. Vite + vanilla JS + lit-html.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "deploy": "vite build && gh-pages -d dist"
+  },
+  "dependencies": {
+    "lit-html": "^3.2.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10",
+    "gh-pages": "^6.2.0"
+  }
+}

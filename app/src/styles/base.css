@@ -1,0 +1,146 @@
+/* ons weekmenu — base styles v0.1
+   Reset + typografie + herbruikbare componenten (chip, btn, card). */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-2);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Typografie */
+.display {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.mono { font-family: var(--mono); }
+
+h1, h2, h3 { margin: 0; }
+
+/* Chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.chip.tomato  { background: var(--tomato-tint);  color: oklch(40% 0.14 28);  border-color: oklch(85% 0.08 28); }
+.chip.leaf    { background: var(--leaf-tint);    color: oklch(38% 0.12 145); border-color: oklch(85% 0.08 145); }
+.chip.mustard { background: var(--mustard-tint); color: oklch(40% 0.10 85);  border-color: oklch(85% 0.08 85); }
+.chip.berry   { background: var(--berry-tint);   color: oklch(38% 0.12 260); border-color: oklch(85% 0.08 260); }
+.chip.plum    { background: var(--plum-tint);    color: oklch(38% 0.12 340); border-color: oklch(85% 0.08 340); }
+
+/* Knoppen */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+  font-size: 14px;
+  transition: transform .12s ease, background .12s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn.ghost {
+  background: transparent;
+  color: var(--ink);
+}
+.btn.tomato { background: var(--tomato); border-color: var(--tomato); color: white; }
+
+/* Card */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--pad);
+}
+
+/* Subtiele scrollbar */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* FoodPh placeholder (uit prototype) — gestreepte achtergrond met optioneel label */
+.ph {
+  position: relative;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      var(--ph-stripe-a, oklch(92% 0.05 var(--ph-h, 80))) 0 8px,
+      var(--ph-stripe-b, oklch(86% 0.09 var(--ph-h, 80))) 8px 16px
+    );
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.ph .ph-label {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  background: oklch(98% 0.012 80 / 0.85);
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+
+/* Mono comment-regel ("// ...") gebruikt overal voor labels */
+.cmt {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+
+/* Container met max-width voor view-content */
+.view-wrap {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 32px;
+}
+@media (max-width: 720px) {
+  .view-wrap { padding: 18px; }
+}

@@ -1,0 +1,63 @@
+/* ons weekmenu — design tokens v0.1
+   Overgenomen uit prototype (Weekmenu Prototype _standalone_.html).
+   Kleuren in oklch voor brede gamut + voorspelbare lichtheid. */
+
+:root {
+  /* base */
+  --bg:    oklch(98% 0.012 80);
+  --bg-2:  oklch(96% 0.018 80);
+  --bg-3:  oklch(94% 0.022 80);
+  --ink:   oklch(18% 0.02 60);
+  --ink-2: oklch(38% 0.02 60);
+  --ink-3: oklch(58% 0.02 60);
+  --line:   oklch(90% 0.012 80);
+  --line-2: oklch(85% 0.014 80);
+
+  /* accents (gedeelde chroma+lichtheid, tint per hue) */
+  --tomato:  oklch(68% 0.18 28);
+  --leaf:    oklch(70% 0.16 145);
+  --mustard: oklch(82% 0.14 85);
+  --berry:   oklch(58% 0.14 260);
+  --plum:    oklch(55% 0.16 340);
+
+  /* tints (zachte achtergronden) */
+  --tomato-tint:  oklch(94% 0.04 28);
+  --leaf-tint:    oklch(94% 0.04 145);
+  --mustard-tint: oklch(95% 0.04 85);
+  --berry-tint:   oklch(94% 0.04 260);
+  --plum-tint:    oklch(94% 0.04 340);
+
+  /* persoon-kleuren (semantisch) */
+  --peter:   var(--berry);
+  --miranda: var(--plum);
+  --beiden:  var(--leaf);
+
+  /* type */
+  --display: 'Bricolage Grotesque', ui-serif, Georgia, serif;
+  --ui:      'Inter', system-ui, -apple-system, sans-serif;
+  --mono:    'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  /* radii */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-xl: 32px;
+
+  /* density (overrideable via [data-density="compact"]) */
+  --pad: 20px;
+  --gap: 16px;
+
+  /* breakpoints (alleen voor JS lookup, CSS gebruikt media queries) */
+  --bp-mobile:  640px;
+  --bp-tablet:  960px;
+  --bp-desktop: 1280px;
+}
+
+[data-density="compact"] {
+  --pad: 14px;
+  --gap: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Donkere modus volgt in v0.5; nu nog niet, om consistent te blijven met prototype. */
+}
