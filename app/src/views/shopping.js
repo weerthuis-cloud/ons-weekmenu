@@ -27,6 +27,7 @@ const vs = {
   list: null,
   items: [],
   initialized: false,
+  editingKey: null,     // itemKey van item dat momenteel in qty-edit mode staat
 };
 
 function ensureInit() {
@@ -103,6 +104,36 @@ async function toggleChecked(idx) {
   rerender();
   try { vs.list = await updateShoppingList({ id: vs.list.id, items: next }); }
   catch (err) { vs.error = err.message; rerender(); }
+}
+
+function startEditQty(key) {
+  vs.editingKey = key;
+  rerender();
+  // Focus de input na de re-render
+  queueMicrotask(() => {
+    const el = document.querySelector('input.qty-edit-input');
+    if (el) { el.focus(); el.select(); }
+  });
+}
+
+async function commitEditQty(idx, rawValue) {
+  vs.editingKey = null;
+  const trimmed = (rawValue || '').trim();
+  let newQty = null;
+  if (trimmed !== '') {
+    const n = Number(trimmed.replace(',', '.'));
+    if (Number.isFinite(n) && n >= 0) newQty = n;
+  }
+  const next = vs.items.map((x, i) => i === idx ? { ...x, qty: newQty } : x);
+  vs.items = next;
+  rerender();
+  try { vs.list = await updateShoppingList({ id: vs.list.id, items: next }); }
+  catch (err) { vs.error = err.message; rerender(); }
+}
+
+function cancelEditQty() {
+  vs.editingKey = null;
+  rerender();
 }
 
 async function clearAllChecks() {
@@ -302,10 +333,38 @@ export function ShoppingView(state) {
       .item-row:hover { background: var(--bg-2); }
       .item-row.is-done { opacity: 0.45; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
-      .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; }
       .item-row .name { font-size: 14px; font-weight: 500; }
       .item-row .variant-hint { font-size: 10px; color: var(--ink-3); font-style: italic; }
       .item-row .qty { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
+      .qty-edit-btn {
+        font-family: var(--mono); font-size: 12px;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+        color: var(--ink-2);
+        min-width: 60px;
+        text-align: right;
+      }
+      .qty-edit-btn:hover { border-color: var(--ink); color: var(--ink); }
+      .qty-empty { color: var(--ink-3); font-style: italic; }
+      .partial-mark { color: var(--tomato); font-weight: 700; margin-left: 2px; }
+
+      .qty-edit-input {
+        font-family: var(--mono); font-size: 12px;
+        width: 70px;
+        padding: 4px 8px;
+        border: 1.5px solid var(--ink);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--ink);
+        text-align: right;
+      }
+      .qty-edit-input:focus { outline: none; }
+      .qty-unit { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-left: -4px; }
 
       .person-tag {
         display: inline-block;
@@ -342,7 +401,6 @@ export function ShoppingView(state) {
 }
 
 function renderCategoryCard(group, allItems) {
-  // Toon variants als er meer dan 1 zijn (compacte hint).
   const showWhoTags = vs.modus === 'huishouden';
   return html`
     <div class="store-card">
@@ -356,17 +414,40 @@ function renderCategoryCard(group, allItems) {
       <ul class="item-list">
         ${group.items.map(item => {
           const idx = allItems.indexOf(item);
+          const key = itemKey(item);
+          const isEditing = vs.editingKey === key;
           const variantHint = item.variants && item.variants.length > 1
             ? `ook: ${item.variants.filter(v => v.toLowerCase() !== item.name.toLowerCase()).join(', ')}`
             : '';
           return html`
-            <li class="item-row ${item.checked ? 'is-done' : ''}" @click=${() => toggleChecked(idx)}>
-              ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
-              <div class="name-col">
+            <li class="item-row ${item.checked ? 'is-done' : ''}">
+              <span @click=${() => toggleChecked(idx)}>
+                ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
+              </span>
+              <div class="name-col" @click=${() => toggleChecked(idx)}>
                 <span class="name">${item.name}</span>
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
               </div>
-              <span class="qty">${formatQty(item.qty, item.unit)}${item.partial ? ' +' : ''}</span>
+              ${isEditing ? html`
+                <input
+                  class="qty-edit-input"
+                  type="text"
+                  inputmode="decimal"
+                  .value=${item.qty != null ? String(item.qty) : ''}
+                  @blur=${(e) => commitEditQty(idx, e.target.value)}
+                  @keydown=${(e) => {
+                    if (e.key === 'Enter') { e.target.blur(); }
+                    else if (e.key === 'Escape') { cancelEditQty(); }
+                  }}
+                />
+                <span class="qty-unit">${item.unit || ''}</span>
+              ` : html`
+                <button class="qty-edit-btn" title="aanpassen" @click=${(e) => { e.stopPropagation(); startEditQty(key); }}>
+                  ${item.qty != null
+                    ? html`${formatQty(item.qty, item.unit)}${item.partial ? html`<span class="partial-mark">+</span>` : ''}`
+                    : html`<span class="qty-empty">+ qty</span>`}
+                </button>
+              `}
               ${showWhoTags ? html`
                 <span class="who">
                   ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
