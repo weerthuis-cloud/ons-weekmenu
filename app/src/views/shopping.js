@@ -242,8 +242,10 @@ export function ShoppingView(state) {
   const filteredItems = vs.storeFilter === 'all'
     ? all
     : all.filter(it => it.store === vs.storeFilter);
-  // Primaire groepering: categorie (groente/zuivel/brood/etc.)
-  const groups = groupByCategory(filteredItems);
+  // Splits open en afgevinkt; open items per categorie, afgevinkt apart onderaan.
+  const openItems = filteredItems.filter(i => !i.checked);
+  const doneItems = filteredItems.filter(i => i.checked);
+  const groups = groupByCategory(openItems);
 
   const totalCount = all.length;
   const checkedCount = all.filter(i => i.checked).length;
@@ -328,6 +330,8 @@ export function ShoppingView(state) {
       <div class="store-grid">
         ${groups.map(group => renderCategoryCard(group, all))}
       </div>
+
+      ${doneItems.length > 0 ? renderDoneSection(doneItems, all) : nothing}
     </section>
 
     <style>
@@ -391,6 +395,14 @@ export function ShoppingView(state) {
         border-radius: var(--r-lg);
         padding: 18px;
       }
+      .done-card {
+        background: var(--bg-2);
+        border: 1px dashed var(--line-2);
+        border-radius: var(--r-lg);
+        padding: 14px 18px;
+        margin-top: 4px;
+      }
+      .done-head { margin-bottom: 8px; }
       .store-head {
         display: flex; align-items: center; justify-content: space-between;
         margin-bottom: 14px;
@@ -569,6 +581,30 @@ function renderNotesPanel() {
           </ul>
         `}
       ` : ''}
+    </div>
+  `;
+}
+
+function renderDoneSection(doneItems, allItems) {
+  return html`
+    <div class="done-card">
+      <div class="done-head">
+        <div class="cmt">// afgevinkt — ${doneItems.length} ${doneItems.length === 1 ? 'item' : 'items'}</div>
+      </div>
+      <ul class="item-list">
+        ${doneItems.map(item => {
+          const idx = allItems.indexOf(item);
+          return html`
+            <li class="item-row is-done" @click=${() => toggleChecked(idx)}>
+              ${Checkbox({ checked: true, hue: 145, onClick: () => toggleChecked(idx) })}
+              <div class="name-col">
+                <span class="name">${item.name}</span>
+              </div>
+              <span class="qty">${formatQty(item.qty, item.unit)}${item.partial ? ' +' : ''}</span>
+            </li>
+          `;
+        })}
+      </ul>
     </div>
   `;
 }
