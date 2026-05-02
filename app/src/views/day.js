@@ -1,12 +1,11 @@
-// Dag-overzicht v0.6: prototype-style day-picker + 1.6fr/1fr layout met FoodPh-rows.
+// Dag-overzicht: prototype-style day-picker + 1.6fr/1fr layout. v0.7+ zonder FoodPh-placeholder.
 import { html, nothing } from 'lit-html';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { DAGEN, DAGEN_KORT, todayInfo, weekDates, formatDate } from '../lib/datums.js';
 import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, onDataChange } from '../lib/data.js';
 import { openMealPicker } from '../components/meal-picker.js';
-import { FoodPh } from '../components/food-ph.js';
 import { SlotIcon } from '../components/slot-icon.js';
-import { hueForSlot, chipForSlot, SLOT_VISUAL, SLOT_TIME } from '../lib/cat.js';
+import { chipForSlot, SLOT_VISUAL, SLOT_TIME } from '../lib/cat.js';
 import { rerender } from '../main.js';
 
 const vs = {
@@ -207,7 +206,7 @@ export function DayView(state) {
         border-radius: var(--r-lg);
         padding: 18px;
         display: grid;
-        grid-template-columns: 80px 180px 1fr auto;
+        grid-template-columns: 80px 1fr auto;
         gap: 20px;
         align-items: center;
       }
@@ -219,7 +218,7 @@ export function DayView(state) {
       .slot-row .name { font-size: 22px; line-height: 1.1; letter-spacing: -0.01em; font-family: var(--display); font-weight: 700; }
       .slot-row .ing { font-size: 12px; color: var(--ink-3); }
       .slot-row .empty {
-        grid-column: 2 / span 2;
+        grid-column: 2;
         display: flex; align-items: center; justify-content: center;
         height: 96px;
         border: 1px dashed var(--line-2);
@@ -284,18 +283,19 @@ function renderSlot(slot, persoon) {
   const p = showPeter   ? findMeal('peter',   vs.day, slot.id) : null;
   const m = showMiranda ? findMeal('miranda', vs.day, slot.id) : null;
 
-  // Voor 'beiden' tonen we beide rijen onder elkaar als gescheiden meals.
-  // Voor enkele persoon: één rij.
+  // Persoon-tag tonen alleen in 'beiden'-modus.
+  const showPerson = persoon === 'beiden';
+
   if (persoon === 'beiden') {
     return html`
-      ${renderSlotRow(slot, slotInfo, 'peter',   p)}
-      ${renderSlotRow(slot, slotInfo, 'miranda', m)}
+      ${renderSlotRow(slot, slotInfo, 'peter',   p, true)}
+      ${renderSlotRow(slot, slotInfo, 'miranda', m, true)}
     `;
   }
-  return renderSlotRow(slot, slotInfo, persoon, p || m);
+  return renderSlotRow(slot, slotInfo, persoon, p || m, false);
 }
 
-function renderSlotRow(slot, slotInfo, slug, wm) {
+function renderSlotRow(slot, slotInfo, slug, wm, showPerson = false) {
   if (!wm) {
     return html`
       <div class="slot-row">
@@ -304,7 +304,7 @@ function renderSlotRow(slot, slotInfo, slug, wm) {
           <div class="time">${SLOT_TIME[slot.id]}</div>
         </div>
         <button class="empty" @click=${() => openPicker(slug, slot.id)}>
-          + voeg ${slotInfo.korte.toLowerCase()} toe ${slug ? `voor ${slug}` : ''}
+          + voeg ${slotInfo.korte.toLowerCase()} toe ${showPerson && slug ? `voor ${slug}` : ''}
         </button>
       </div>
     `;
@@ -316,11 +316,10 @@ function renderSlotRow(slot, slotInfo, slug, wm) {
         <div class="slot-icon">${SlotIcon({ slot: slot.id, size: 24 })}</div>
         <div class="time">${SLOT_TIME[slot.id]}</div>
       </div>
-      ${FoodPh({ hue: hueForSlot(slot.id), label: `// ${(wm.meal.name || '').toLowerCase().slice(0, 18)}`, height: 120, radius: 12 })}
       <div class="meta">
         <div class="chips">
           <span class="chip ${chipForSlot(slot.id)}">${slotInfo.korte}</span>
-          ${slug ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
+          ${showPerson ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
           ${wm.meal.bereidingstijd ? html`<span class="chip">${wm.meal.bereidingstijd}m</span>` : ''}
           ${(wm.meal.tags || []).slice(0, 1).map(t => html`<span class="chip">${t}</span>`)}
         </div>
