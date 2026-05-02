@@ -250,22 +250,22 @@ export function ShoppingView(state) {
       ${renderNotesPanel()}
 
       <div class="hero-row">
-        <div class="hero-card hero-dark">
+        <div class="hero-card hero-dark hero-totaal">
           <div class="cmt">// totaal</div>
           <div class="display">${totalCount}</div>
           <div class="lead">items voor week ${vs.week}</div>
         </div>
-        <div class="hero-card">
+        <div class="hero-card hero-checked">
           <div class="cmt">// afgevinkt</div>
           <div class="display">${checkedCount}<span class="frac">/${totalCount}</span></div>
           <div class="bar"><div style="width:${progressPct}%;"></div></div>
         </div>
-        <div class="hero-card hero-soft">
+        <div class="hero-card hero-soft hero-modus">
           <div class="cmt">// modus</div>
           <div class="display modus-display">${vs.modus === 'huishouden' ? 'Huishouden' : (vs.modus[0].toUpperCase() + vs.modus.slice(1))}</div>
           <div class="lead">${formatWeekRange(vs.year, vs.week)}</div>
         </div>
-        <div class="hero-card actions-card">
+        <div class="hero-card actions-card hero-acties">
           <div class="cmt">// acties</div>
           <div class="actions">
             <button class="btn" @click=${generateOrRefresh} ?disabled=${vs.loading || weekIdsCount === 0}>
@@ -299,7 +299,7 @@ export function ShoppingView(state) {
 
       ${vs.error ? html`<div class="err">${vs.error}</div>` : nothing}
 
-      <div class="filter-row no-print" style="justify-content: flex-start;">
+      <div class="filter-row no-print store-filter-row" style="justify-content: flex-start;">
         <div class="cmt" style="margin-right: 8px;">// gegroepeerd per winkel</div>
         <button class="chip ${vs.storeFilter === 'all' ? 'is-on' : ''}" @click=${() => setStoreFilter('all')}>
           Alle winkels (${all.length})
@@ -497,9 +497,18 @@ export function ShoppingView(state) {
         .hero-row { grid-template-columns: 1fr 1fr; }
       }
       @media (max-width: 720px) {
-        .hero-row { grid-template-columns: 1fr; }
-        .hero-card .display { font-size: 36px; }
+        .hero-row { display: contents; }
+        .hero-card { display: flex; flex-direction: column; gap: 4px; }
+        .hero-card .display { font-size: 32px; }
         .modus-display { font-size: 22px; }
+        .hero-totaal { order: 0; }
+        .hero-checked { order: 100; }
+        .hero-modus   { order: 101; }
+        .hero-acties  { order: 102; }
+        .actions-card .btn { font-size: 13px; }
+
+        /* Winkel-filter rij verbergen op mobiel — niet relevant zonder winkel-data */
+        .store-filter-row { display: none; }
       }
 
       @media print {

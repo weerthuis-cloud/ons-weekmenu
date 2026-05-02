@@ -353,6 +353,13 @@ export function WeekView(state) {
         .hero-side { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
       }
       @media (max-width: 720px) {
+        .hero-side { display: none; }
+        .hero-main { padding: 16px; min-height: auto; gap: 8px; }
+        .hero-main .display { font-size: 32px; line-height: 1; }
+        .hero-main .lead { font-size: 12px; line-height: 1.4; max-width: none; margin-top: 6px; }
+        .hero-main .chip-row { display: none; }
+      }
+      @media (max-width: 720px) {
         .week-grid { grid-template-columns: 1fr; gap: 8px; }
         .day-col { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: start; }
         .day-col .day-head { flex-direction: column; align-items: flex-start; gap: 0; margin: 0; }

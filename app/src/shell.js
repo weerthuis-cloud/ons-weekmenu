@@ -43,7 +43,10 @@ export function Shell(state, actions) {
     <header class="topbar">
       <div class="brand">
         ${Logo({ size: 32 })}
-        <h1 class="display brand-title">ons weekmenu</h1>
+        <h1 class="display brand-title">
+          <span class="brand-full">ons weekmenu</span>
+          <span class="brand-short">OWM</span>
+        </h1>
       </div>
 
       <nav class="nav-pills" aria-label="Schermen">
@@ -85,6 +88,7 @@ export function Shell(state, actions) {
       }
       .brand { display: flex; align-items: center; gap: 10px; }
       .brand-title { font-size: 22px; letter-spacing: -0.03em; }
+      .brand-short { display: none; }
 
       .nav-pills {
         display: flex;
@@ -139,6 +143,8 @@ export function Shell(state, actions) {
       @media (max-width: 720px) {
         .topbar { padding: 10px 14px; gap: 8px; }
         .brand-title { font-size: 18px; }
+        .brand-full { display: none; }
+        .brand-short { display: inline; }
         .pill { padding: 6px 12px; font-size: 12px; }
         .persoon-toggle .chip { height: 26px; font-size: 11px; }
         .pill.desktop-only { display: none; }
