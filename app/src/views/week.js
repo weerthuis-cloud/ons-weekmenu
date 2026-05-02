@@ -291,8 +291,16 @@ export function WeekView(state) {
       .day-col.today .slot-add:hover { background: oklch(28% 0.02 60); border-color: var(--bg); color: var(--bg); }
 
       .ph-row {
-        display: flex; align-items: center; gap: 6px;
+        display: flex; align-items: center; gap: 4px;
         font-size: 11px;
+        flex-wrap: wrap;
+      }
+      .meal-mini .mini-chip {
+        height: 16px;
+        padding: 0 6px;
+        font-size: 9px;
+        line-height: 16px;
+        border-width: 1px;
       }
       .ph-row .person-tag {
         display: inline-block;
@@ -458,10 +466,12 @@ function renderSlotCell(day, slot, persoon) {
 }
 
 function renderMiniCard(slug, wm, day, slot, showPerson = false) {
+  const slotInfo = SLOT_VISUAL[slot];
   return html`
     <div class="meal-mini" @click=${() => openDetail(slug, wm, day, slot)}>
       <div class="ph-row">
         ${SlotIcon({ slot, size: 14 })}
+        <span class="chip ${chipForSlot(slot)} mini-chip">${slotInfo?.korte ?? slot}</span>
         ${showPerson ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
       </div>
       <span class="name">${wm.meal.name}</span>
