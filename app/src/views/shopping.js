@@ -4,7 +4,7 @@ import { todayInfo, formatWeekRange } from '../lib/datums.js';
 import { listProfiles, getWeek, getWeekMeals,
          getShoppingList, createShoppingList, updateShoppingList, deleteShoppingList,
          onDataChange } from '../lib/data.js';
-import { aggregateShopping, groupByStore, itemKey } from '../lib/shopping.js';
+import { aggregateShopping, groupByCategory, groupByStore, itemKey } from '../lib/shopping.js';
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { Checkbox } from '../components/checkbox.js';
@@ -135,7 +135,8 @@ export function ShoppingView(state) {
   const filteredItems = vs.storeFilter === 'all'
     ? all
     : all.filter(it => it.store === vs.storeFilter);
-  const groups = groupByStore(filteredItems);
+  // Primaire groepering: categorie (groente/zuivel/brood/etc.)
+  const groups = groupByCategory(filteredItems);
 
   const totalCount = all.length;
   const checkedCount = all.filter(i => i.checked).length;
@@ -216,7 +217,7 @@ export function ShoppingView(state) {
       ` : nothing}
 
       <div class="store-grid">
-        ${groups.map(group => renderStoreCard(group, all))}
+        ${groups.map(group => renderCategoryCard(group, all))}
       </div>
     </section>
 
@@ -301,7 +302,9 @@ export function ShoppingView(state) {
       .item-row:hover { background: var(--bg-2); }
       .item-row.is-done { opacity: 0.45; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
-      .item-row .name { flex: 1; font-size: 13px; font-weight: 500; }
+      .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .item-row .name { font-size: 14px; font-weight: 500; }
+      .item-row .variant-hint { font-size: 10px; color: var(--ink-3); font-style: italic; }
       .item-row .qty { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
 
       .person-tag {
@@ -338,29 +341,38 @@ export function ShoppingView(state) {
   `;
 }
 
-function renderStoreCard(group, allItems) {
-  const hue = STORE_HUE[group.store] ?? 80;
+function renderCategoryCard(group, allItems) {
+  // Toon variants als er meer dan 1 zijn (compacte hint).
+  const showWhoTags = vs.modus === 'huishouden';
   return html`
     <div class="store-card">
       <div class="store-head">
         <div class="left">
-          <span class="dot" style="background:oklch(70% 0.16 ${hue});"></span>
-          <span class="name">${winkelLabel(group.store)}</span>
+          <span class="dot" style="background:oklch(70% 0.16 ${group.hue});"></span>
+          <span class="name">${group.label}</span>
         </div>
         <span class="count">${group.items.length}</span>
       </div>
       <ul class="item-list">
         ${group.items.map(item => {
           const idx = allItems.indexOf(item);
+          const variantHint = item.variants && item.variants.length > 1
+            ? `ook: ${item.variants.filter(v => v.toLowerCase() !== item.name.toLowerCase()).join(', ')}`
+            : '';
           return html`
             <li class="item-row ${item.checked ? 'is-done' : ''}" @click=${() => toggleChecked(idx)}>
-              ${Checkbox({ checked: item.checked, hue, onClick: () => toggleChecked(idx) })}
-              <span class="name">${item.name}</span>
+              ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
+              <div class="name-col">
+                <span class="name">${item.name}</span>
+                ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
+              </div>
               <span class="qty">${formatQty(item.qty, item.unit)}${item.partial ? ' +' : ''}</span>
-              <span class="who">
-                ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
-                ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
-              </span>
+              ${showWhoTags ? html`
+                <span class="who">
+                  ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
+                  ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
+                </span>
+              ` : ''}
             </li>
           `;
         })}

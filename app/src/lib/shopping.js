@@ -3,6 +3,7 @@
 // houdt 'who' bij (welke personen hebben dit nodig).
 
 import { aggKey } from './units.js';
+import { classifyIngredient, categoryLabel, categoryHue, categoryOrder } from './categorie.js';
 
 // Bereidingswijzen die genegeerd worden bij groeperen ("Ei, gebakken" → "Ei").
 const BEREIDING_RE = /\b(gebakken|gekookt|gefruit|gegrild|geroosterd|gestoomd|gepocheerd|rauwe?|magere|volle|halfvolle|mager|vol|halfvol)\b/gi;
@@ -99,13 +100,14 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
       qty: g.qty > 0 ? g.qty : null,
       unit: g.unit,
       store: g.store,
+      category: classifyIngredient(g.nameKey),
       who: Array.from(g.who),
       partial: g.qtyMissing && g.qty > 0,
       variants: Array.from(g.variants),
       sources: g.sources,
     }))
     .sort((a, b) => {
-      if (a.store !== b.store) return a.store.localeCompare(b.store);
+      if (a.category !== b.category) return categoryOrder(a.category) - categoryOrder(b.category);
       return a.name.localeCompare(b.name);
     });
 }
@@ -131,4 +133,22 @@ export function groupByStore(items) {
     groups.get(key).push(item);
   }
   return Array.from(groups.entries()).map(([store, items]) => ({ store, items }));
+}
+
+// Groepeer items per categorie (groente/zuivel/etc.) — primaire weergave in supermarkt.
+export function groupByCategory(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = item.category || 'overig';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => categoryOrder(a) - categoryOrder(b))
+    .map(([catId, items]) => ({
+      categoryId: catId,
+      label: categoryLabel(catId),
+      hue: categoryHue(catId),
+      items,
+    }));
 }
