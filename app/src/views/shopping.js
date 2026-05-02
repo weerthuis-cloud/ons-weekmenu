@@ -136,6 +136,12 @@ async function loadAll() {
     else {
       vs.list = await getShoppingList({ ownerId: appState.auth.profile.id, weekIds });
       vs.items = vs.list?.items || [];
+      // Geen lijst voor deze selectie? Auto-genereer.
+      if (!vs.list) {
+        vs.loading = false;
+        await generateOrRefresh();
+        return;
+      }
     }
   } catch (err) {
     vs.error = err.message;
@@ -501,7 +507,8 @@ export function ShoppingView(state) {
         .hero-card { display: flex; flex-direction: column; gap: 4px; }
         .hero-card .display { font-size: 32px; }
         .modus-display { font-size: 22px; }
-        .hero-totaal { order: 0; }
+        /* Alle hero-cards naar onderen op mobiel; volgorde Totaal → Afgevinkt → Modus → Acties */
+        .hero-totaal  { order: 99; }
         .hero-checked { order: 100; }
         .hero-modus   { order: 101; }
         .hero-acties  { order: 102; }
