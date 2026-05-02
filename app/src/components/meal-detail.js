@@ -6,6 +6,7 @@ import { html, render, nothing } from 'lit-html';
 import { SLOT_BY_ID } from '../lib/slots.js';
 import { SlotIcon } from './slot-icon.js';
 import { formatQty } from '../lib/units.js';
+import { DAGEN_KORT } from '../lib/datums.js';
 
 const HOST_ID = '__meal_detail_host';
 
@@ -15,6 +16,12 @@ const ui = {
   wm: null,            // de week_meal-row inclusief meal-data
   onReplace: null,
   onClear: null,
+  onMove: null,         // (toDay) → Promise
+  onSwap: null,         // (otherDay) → Promise
+  // sub-mode binnen modal: 'detail' (default) | 'move' | 'swap'
+  mode: 'detail',
+  // alle bestaande week_meals voor zelfde slug+slot, voor "ruil met" UI
+  siblings: [],
 };
 
 function ensureHost() {
@@ -32,6 +39,10 @@ function close() {
   ui.wm = null;
   ui.onReplace = null;
   ui.onClear = null;
+  ui.onMove = null;
+  ui.onSwap = null;
+  ui.mode = 'detail';
+  ui.siblings = [];
   rerender();
 }
 
@@ -52,16 +63,102 @@ function doClear() {
   if (cb) cb();
 }
 
-export function openMealDetail({ slot, wm, onReplace, onClear }) {
+async function doMove(toDay) {
+  const cb = ui.onMove;
+  close();
+  if (cb) await cb(toDay);
+}
+
+async function doSwap(otherDay) {
+  const cb = ui.onSwap;
+  close();
+  if (cb) await cb(otherDay);
+}
+
+function setMode(mode) {
+  ui.mode = mode;
+  rerender();
+}
+
+export function openMealDetail({ slot, wm, onReplace, onClear, onMove, onSwap, siblings = [] }) {
   ui.open = true;
   ui.slot = slot;
   ui.wm = wm;
   ui.onReplace = onReplace;
   ui.onClear = onClear;
+  ui.onMove = onMove;
+  ui.onSwap = onSwap;
+  ui.siblings = siblings;
+  ui.mode = 'detail';
   rerender();
 }
 
 // Lichte markdown→HTML: **bold**, *italic*, lijsten, paragraaf-breaks
+// Helper: krijg een sibling voor een specifieke dag (uit ui.siblings)
+function siblingForDay(day) {
+  return ui.siblings.find(s => s.day === day);
+}
+
+function currentDay() {
+  return ui.wm?.day;
+}
+
+function renderMovePanel() {
+  return html`
+    <div class="md-mode-head">
+      <div class="cmt">// verplaats naar...</div>
+      <p class="lead">Kies de dag waar deze maaltijd heen moet. Een maaltijd op dezelfde plek wordt overschreven.</p>
+    </div>
+    <div class="md-day-grid">
+      ${[1,2,3,4,5,6,7].map(d => {
+        const sib = siblingForDay(d);
+        const isCurrent = d === currentDay();
+        return html`
+          <button
+            class="md-day-btn ${isCurrent ? 'is-current' : ''} ${!sib && !isCurrent ? 'is-empty' : ''}"
+            ?disabled=${isCurrent}
+            @click=${() => doMove(d)}
+            title=${sib ? sib.meal?.name ?? '' : 'leeg'}
+          >
+            <span class="md-day-name">${DAGEN_KORT[d - 1]}</span>
+            <span class="md-day-status">${isCurrent ? 'huidige' : (sib ? (sib.meal?.name ?? '...').slice(0, 14) + (sib.meal?.name?.length > 14 ? '…' : '') : 'leeg')}</span>
+          </button>
+        `;
+      })}
+    </div>
+  `;
+}
+
+function renderSwapPanel() {
+  const validDays = [1,2,3,4,5,6,7].filter(d => d !== currentDay() && siblingForDay(d));
+  return html`
+    <div class="md-mode-head">
+      <div class="cmt">// ruil met...</div>
+      <p class="lead">${validDays.length === 0
+        ? 'Geen andere dag in deze week heeft een maaltijd in dit slot. Niets om mee te ruilen.'
+        : 'Kies een dag. De twee maaltijden wisselen plaats.'}</p>
+    </div>
+    <div class="md-day-grid">
+      ${[1,2,3,4,5,6,7].map(d => {
+        const sib = siblingForDay(d);
+        const isCurrent = d === currentDay();
+        const canSwap = !isCurrent && !!sib;
+        return html`
+          <button
+            class="md-day-btn ${isCurrent ? 'is-current' : ''} ${!sib ? 'is-empty' : ''}"
+            ?disabled=${!canSwap}
+            @click=${() => canSwap && doSwap(d)}
+            title=${sib ? sib.meal?.name ?? '' : 'leeg'}
+          >
+            <span class="md-day-name">${DAGEN_KORT[d - 1]}</span>
+            <span class="md-day-status">${isCurrent ? 'huidige' : (sib ? (sib.meal?.name ?? '...').slice(0, 14) + (sib.meal?.name?.length > 14 ? '…' : '') : '—')}</span>
+          </button>
+        `;
+      })}
+    </div>
+  `;
+}
+
 function renderRecipe(text) {
   if (!text) return null;
   // Splits per regel, render per regel met mini-formatting
@@ -117,6 +214,8 @@ function view() {
   const meal = ui.wm.meal || {};
   const isDiner = ui.slot === 'diner';
   const ingredients = meal.ingredients || [];
+  const hasRecipe = !!meal.recipe;
+  const hasIngredients = ingredients.length > 0;
 
   return html`
     <div class="md-backdrop" @click=${close}>
@@ -133,23 +232,28 @@ function view() {
         </header>
 
         <div class="md-body">
-          ${isDiner && meal.recipe
-            ? html`<div class="md-recipe">${renderRecipe(meal.recipe)}</div>`
-            : ingredients.length
-              ? html`
-                <div class="cmt">// ingrediënten</div>
-                <ul class="md-ing-list">
-                  ${ingredients.map(ing => html`
-                    <li>
-                      <span class="ing-name">${ing.name}</span>
-                      <span class="ing-qty mono">${formatQty(ing.qty, ing.unit)}</span>
-                    </li>
-                  `)}
-                </ul>
-              `
-              : html`<p class="cmt">Geen ingrediënten of recept opgegeven.</p>`}
+          ${hasIngredients ? html`
+            <div class="cmt">// ingrediënten</div>
+            <ul class="md-ing-list">
+              ${ingredients.map(ing => html`
+                <li>
+                  <span class="ing-name">${ing.name}</span>
+                  <span class="ing-qty mono">${formatQty(ing.qty, ing.unit)}</span>
+                </li>
+              `)}
+            </ul>
+          ` : nothing}
 
-          ${isDiner && !meal.recipe ? html`
+          ${hasRecipe ? html`
+            <div class="cmt">// ${isDiner ? 'recept' : 'tips'}</div>
+            <div class="md-recipe">${renderRecipe(meal.recipe)}</div>
+          ` : nothing}
+
+          ${!hasRecipe && !hasIngredients ? html`
+            <p class="cmt">Geen ingrediënten of recept opgegeven.</p>
+          ` : nothing}
+
+          ${isDiner && !hasRecipe ? html`
             <div class="md-norecipe">
               <span class="cmt">// geen recept</span>
               <p>Voor dit gerecht is nog geen recept opgeslagen. Voeg het toe via Maker → bewerken.</p>
@@ -158,14 +262,42 @@ function view() {
         </div>
 
         <footer class="md-foot">
-          <button class="btn ghost danger" @click=${doClear}>verwijder</button>
-          <span style="flex:1"></span>
-          <button class="btn ghost" @click=${doReplace}>vervang</button>
-          <button class="btn" @click=${close}>klaar</button>
+          ${ui.mode === 'detail' ? html`
+            <button class="btn ghost danger" @click=${doClear}>verwijder</button>
+            <span style="flex:1"></span>
+            ${ui.onMove ? html`<button class="btn ghost" @click=${() => setMode('move')}>verplaats</button>` : ''}
+            ${ui.onSwap ? html`<button class="btn ghost" @click=${() => setMode('swap')}>ruil</button>` : ''}
+            <button class="btn ghost" @click=${doReplace}>vervang</button>
+            <button class="btn" @click=${close}>klaar</button>
+          ` : html`
+            <button class="btn ghost" @click=${() => setMode('detail')}>← terug</button>
+          `}
         </footer>
+
+        ${ui.mode === 'move' ? renderMovePanel() : nothing}
+        ${ui.mode === 'swap' ? renderSwapPanel() : nothing}
       </div>
 
       <style>
+        .md-day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 14px 22px; }
+        .md-day-btn {
+          background: var(--bg-2);
+          border: 1px solid var(--line);
+          border-radius: var(--r-sm);
+          padding: 10px 6px;
+          font: inherit;
+          cursor: pointer;
+          display: flex; flex-direction: column; align-items: center; gap: 4px;
+          color: var(--ink);
+        }
+        .md-day-btn:hover { border-color: var(--ink); transform: translateY(-1px); }
+        .md-day-btn.is-current { background: var(--mustard-tint); border-color: oklch(80% 0.08 85); cursor: default; }
+        .md-day-btn.is-current:hover { transform: none; }
+        .md-day-btn.is-empty .md-day-status { color: var(--ink-3); font-style: italic; }
+        .md-day-btn .md-day-name { font-weight: 700; font-size: 12px; }
+        .md-day-btn .md-day-status { font-size: 10px; color: var(--ink-2); text-align: center; line-height: 1.2; max-height: 30px; overflow: hidden; }
+        .md-mode-head { padding: 14px 22px 0; }
+        .md-mode-head .lead { color: var(--ink-2); font-size: 13px; }
         .md-backdrop {
           position: fixed; inset: 0;
           background: oklch(18% 0.02 60 / 0.55);

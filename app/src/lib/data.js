@@ -197,6 +197,41 @@ export async function setWeekMeal({ weekId, day, slot, mealId, porties = 1.0 }) 
   return data;
 }
 
+// Verplaats een meal naar een andere dag (zelfde slot, zelfde week).
+// Overschrijft bestaande meal in doel-slot.
+export async function moveWeekMeal({ weekId, fromDay, toDay, slot, mealId, porties = 1.0 }) {
+  if (fromDay === toDay) return;
+  // Wis bestaande in doel
+  await supabase.from('week_meals').delete()
+    .eq('week_id', weekId).eq('day', toDay).eq('slot', slot);
+  // Wis bron
+  await supabase.from('week_meals').delete()
+    .eq('week_id', weekId).eq('day', fromDay).eq('slot', slot);
+  // Insert in doel
+  const { error } = await supabase.from('week_meals').insert({
+    week_id: weekId, day: toDay, slot, meal_id: mealId, porties,
+  });
+  if (error) throw error;
+  cache.weekMeals.delete(weekId);
+  notify('week_meals');
+}
+
+// Ruil twee meals binnen dezelfde week + slot-type.
+export async function swapWeekMeals({ weekId, slot, dayA, mealIdA, portiesA, dayB, mealIdB, portiesB }) {
+  if (dayA === dayB) return;
+  await supabase.from('week_meals').delete()
+    .eq('week_id', weekId).eq('day', dayA).eq('slot', slot);
+  await supabase.from('week_meals').delete()
+    .eq('week_id', weekId).eq('day', dayB).eq('slot', slot);
+  const { error } = await supabase.from('week_meals').insert([
+    { week_id: weekId, day: dayA, slot, meal_id: mealIdB, porties: portiesB },
+    { week_id: weekId, day: dayB, slot, meal_id: mealIdA, porties: portiesA },
+  ]);
+  if (error) throw error;
+  cache.weekMeals.delete(weekId);
+  notify('week_meals');
+}
+
 export async function removeWeekMeal({ weekId, day, slot }) {
   const { error } = await supabase
     .from('week_meals')

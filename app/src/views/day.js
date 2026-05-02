@@ -2,7 +2,7 @@
 import { html, nothing } from 'lit-html';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { DAGEN, DAGEN_KORT, todayInfo, weekDates, formatDate } from '../lib/datums.js';
-import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, onDataChange } from '../lib/data.js';
+import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, moveWeekMeal, swapWeekMeals, onDataChange } from '../lib/data.js';
 import { openMealPicker } from '../components/meal-picker.js';
 import { openMealDetail } from '../components/meal-detail.js';
 import { SlotIcon } from '../components/slot-icon.js';
@@ -99,11 +99,31 @@ async function clearSlot(slug, slot) {
 }
 
 function openDetail(slug, wm, slot) {
+  const week = vs.weeks[slug];
+  const siblings = (vs.meals[slug] || []).filter(m => m.slot === slot);
   openMealDetail({
     slot,
     wm,
+    siblings,
     onReplace: () => openPicker(slug, slot),
     onClear:   () => clearSlot(slug, slot),
+    onMove: week ? async (toDay) => {
+      await moveWeekMeal({
+        weekId: week.id, fromDay: vs.day, toDay, slot,
+        mealId: wm.meal.id, porties: wm.porties ?? 1,
+      });
+      await loadAll();
+    } : null,
+    onSwap: week ? async (otherDay) => {
+      const other = siblings.find(s => s.day === otherDay);
+      if (!other) return;
+      await swapWeekMeals({
+        weekId: week.id, slot,
+        dayA: vs.day,   mealIdA: wm.meal.id,    portiesA: wm.porties ?? 1,
+        dayB: otherDay, mealIdB: other.meal.id, portiesB: other.porties ?? 1,
+      });
+      await loadAll();
+    } : null,
   });
 }
 

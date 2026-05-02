@@ -73,6 +73,7 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
             variants: new Set(),
             qty: 0,
             qtyMissing: false,
+            count: 0,        // hoe vaak komt dit ingrediënt voor
             unit: unitKey,
             store: storeKey,
             who: new Set(),
@@ -80,6 +81,7 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
           });
         }
         const g = groups.get(key);
+        g.count += 1;
         const u = ing.unit ? require_unit_factor(ing.unit) : 1;
         if (ing.qty == null || ing.qty === '') {
           g.qtyMissing = true;
@@ -103,6 +105,8 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
       category: classifyIngredient(g.nameKey),
       who: Array.from(g.who),
       partial: g.qtyMissing && g.qty > 0,
+      countOnly: g.qty === 0 && g.qtyMissing,  // alleen 'naar keuze' / onbeperkt items
+      count: g.count,                            // hoe vaak nodig deze week
       variants: Array.from(g.variants),
       sources: g.sources,
     }))

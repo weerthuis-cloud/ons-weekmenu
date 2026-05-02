@@ -2,7 +2,7 @@
 import { html, nothing } from 'lit-html';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { DAGEN_KORT, DAGEN, todayInfo, formatWeekRange, weekDates, formatDate } from '../lib/datums.js';
-import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, onDataChange } from '../lib/data.js';
+import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, moveWeekMeal, swapWeekMeals, onDataChange } from '../lib/data.js';
 import { openMealPicker } from '../components/meal-picker.js';
 import { openMealDetail } from '../components/meal-detail.js';
 import { MealCard } from '../components/meal-card.js';
@@ -110,11 +110,33 @@ async function clearSlot(slug, day, slot) {
 
 // Klik op een gevulde cell → toon detail (recept of ingrediënten). Vervangen of wissen via knoppen.
 function openDetail(slug, wm, day, slot) {
+  const week = vs.weeks[slug];
+  if (!week) return;
+  // Verzamel alle siblings (zelfde slug + zelfde slot, alle dagen) voor verplaats/ruil-UI
+  const siblings = (vs.meals[slug] || []).filter(m => m.slot === slot);
   openMealDetail({
     slot,
     wm,
+    siblings,
     onReplace: () => openPicker(slug, day, slot),
     onClear:   () => clearSlot(slug, day, slot),
+    onMove: async (toDay) => {
+      await moveWeekMeal({
+        weekId: week.id, fromDay: day, toDay, slot,
+        mealId: wm.meal.id, porties: wm.porties ?? 1,
+      });
+      await loadAll();
+    },
+    onSwap: async (otherDay) => {
+      const other = siblings.find(s => s.day === otherDay);
+      if (!other) return;
+      await swapWeekMeals({
+        weekId: week.id, slot,
+        dayA: day,       mealIdA: wm.meal.id,    portiesA: wm.porties ?? 1,
+        dayB: otherDay,  mealIdB: other.meal.id, portiesB: other.porties ?? 1,
+      });
+      await loadAll();
+    },
   });
 }
 

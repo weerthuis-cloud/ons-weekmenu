@@ -441,6 +441,7 @@ export function ShoppingView(state) {
       }
       .qty-edit-btn:hover { border-color: var(--ink); color: var(--ink); }
       .qty-empty { color: var(--ink-3); font-style: italic; }
+      .count-only { color: var(--ink-2); font-style: italic; font-size: 11px; }
       .partial-mark { color: var(--tomato); font-weight: 700; margin-left: 2px; }
 
       .qty-edit-input {
@@ -658,7 +659,11 @@ function renderCategoryCard(group, allItems) {
                 <button class="qty-edit-btn" title="aanpassen" @click=${(e) => { e.stopPropagation(); startEditQty(key); }}>
                   ${item.qty != null
                     ? html`${formatQty(item.qty, item.unit)}${item.partial ? html`<span class="partial-mark">+</span>` : ''}`
-                    : html`<span class="qty-empty">+ qty</span>`}
+                    : item.countOnly && item.count > 1
+                      ? html`<span class="count-only">${item.count}× nodig</span>`
+                      : item.countOnly
+                        ? html`<span class="count-only">naar keuze</span>`
+                        : html`<span class="qty-empty">+ qty</span>`}
                 </button>
               `}
               <span class="who">
