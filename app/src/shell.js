@@ -141,13 +141,32 @@ export function Shell(state, actions) {
         .week-info { display: none; }
       }
       @media (max-width: 720px) {
-        .topbar { padding: 10px 14px; gap: 8px; }
+        .topbar {
+          padding: 10px 14px;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
         .brand-title { font-size: 18px; }
         .brand-full { display: none; }
         .brand-short { display: inline; }
-        .pill { padding: 6px 12px; font-size: 12px; }
-        .persoon-toggle .chip { height: 26px; font-size: 11px; }
+
+        /* Eerste rij: brand links, persoon-toggle + avatar rechts */
+        .brand        { order: 1; }
+        .topbar-right { order: 2; margin-left: auto; }
+
+        /* Tweede rij: nav-pills volle breedte */
+        .nav-pills {
+          order: 3;
+          flex: 1 1 100%;
+          justify-content: space-between;
+          padding: 6px 0 0;
+          border-top: 1px solid var(--line);
+          margin-top: 2px;
+        }
+
+        .pill { padding: 6px 12px; font-size: 12px; flex: 1; text-align: center; }
         .pill.desktop-only { display: none; }
+        .persoon-toggle .chip { height: 26px; font-size: 11px; }
       }
     </style>
   `;
