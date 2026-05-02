@@ -386,8 +386,23 @@ function renderHero(persoon, isCurrentWeek, dates, sparkData, avg, filled, total
   `;
 }
 
+// Hoofdmaaltijden altijd tonen; snacks alleen als ze in deze week voor minstens één persoon gevuld zijn.
+const ALWAYS_VISIBLE = new Set(['ontbijt', 'lunch', 'diner']);
+
+function visibleSlots(persoon) {
+  const owners = persoon === 'beiden' ? ['peter', 'miranda'] : [persoon];
+  return SLOTS.filter(slot => {
+    if (ALWAYS_VISIBLE.has(slot.id)) return true;
+    for (const slug of owners) {
+      if (vs.meals[slug]?.some(wm => wm.slot === slot.id)) return true;
+    }
+    return false;
+  });
+}
+
 function renderDayColumn(day, date, today, isCurrentWeek, persoon) {
   const isToday = isCurrentWeek && day === today.day;
+  const slots = visibleSlots(persoon);
   return html`
     <div class="day-col ${isToday ? 'today' : ''}">
       <div class="day-head">
@@ -395,7 +410,7 @@ function renderDayColumn(day, date, today, isCurrentWeek, persoon) {
         <div class="cmt">${date.getUTCDate()}/${date.getUTCMonth() + 1}</div>
       </div>
       <div class="slots">
-        ${SLOTS.map(slot => renderSlotCell(day, slot, persoon))}
+        ${slots.map(slot => renderSlotCell(day, slot, persoon))}
       </div>
     </div>
   `;
