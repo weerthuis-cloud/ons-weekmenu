@@ -180,9 +180,11 @@ function view() {
   if (!ui.open) return null;
   const slotInfo = SLOT_BY_ID[ui.slot];
   const term = ui.search.trim().toLowerCase();
+  // Filter eerst op slot-type: bij ontbijt-cell alleen ontbijt-meals.
+  const slotMatched = ui.slot ? ui.meals.filter(m => m.type === ui.slot) : ui.meals;
   const filtered = term
-    ? ui.meals.filter(m => m.name.toLowerCase().includes(term))
-    : ui.meals;
+    ? slotMatched.filter(m => m.name.toLowerCase().includes(term))
+    : slotMatched;
   const isEdit = ui.mode === 'edit';
   const headerLead = ui.mode === 'pick' ? 'Kies bestaande maaltijd of maak een nieuwe.'
                   : isEdit               ? `Bewerk "${ui.editing?.name ?? '...'}"`

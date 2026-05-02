@@ -4,6 +4,7 @@ import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { DAGEN, DAGEN_KORT, todayInfo, weekDates, formatDate } from '../lib/datums.js';
 import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, onDataChange } from '../lib/data.js';
 import { openMealPicker } from '../components/meal-picker.js';
+import { openMealDetail } from '../components/meal-detail.js';
 import { SlotIcon } from '../components/slot-icon.js';
 import { chipForSlot, SLOT_VISUAL, SLOT_TIME } from '../lib/cat.js';
 import { rerender } from '../main.js';
@@ -93,6 +94,15 @@ async function clearSlot(slug, slot) {
   if (!week) return;
   await removeWeekMeal({ weekId: week.id, day: vs.day, slot });
   await loadAll();
+}
+
+function openDetail(slug, wm, slot) {
+  openMealDetail({
+    slot,
+    wm,
+    onReplace: () => openPicker(slug, slot),
+    onClear:   () => clearSlot(slug, slot),
+  });
 }
 
 function dayTotals(slug) {
@@ -216,6 +226,9 @@ export function DayView(state) {
       .slot-row .chips { display: flex; gap: 6px; flex-wrap: wrap; }
       .slot-row .chip { height: 22px; font-size: 11px; }
       .slot-row .name { font-size: 22px; line-height: 1.1; letter-spacing: -0.01em; font-family: var(--display); font-weight: 700; }
+      .slot-row.clickable { cursor: pointer; transition: transform .12s ease, border-color .12s; }
+      .slot-row.clickable:hover { border-color: var(--ink); transform: translateY(-1px); }
+      .slot-row .detail-hint { align-self: flex-start; }
       .slot-row .ing { font-size: 12px; color: var(--ink-3); }
       .slot-row .empty {
         grid-column: 2;
@@ -311,7 +324,7 @@ function renderSlotRow(slot, slotInfo, slug, wm, showPerson = false) {
   }
   const ingNames = (wm.meal.ingredients || []).map(i => i.name).filter(Boolean).slice(0, 6);
   return html`
-    <div class="slot-row">
+    <div class="slot-row clickable" @click=${() => openDetail(slug, wm, slot.id)}>
       <div>
         <div class="slot-icon">${SlotIcon({ slot: slot.id, size: 24 })}</div>
         <div class="time">${SLOT_TIME[slot.id]}</div>
@@ -322,8 +335,9 @@ function renderSlotRow(slot, slotInfo, slug, wm, showPerson = false) {
           ${showPerson ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
           ${wm.meal.bereidingstijd ? html`<span class="chip">${wm.meal.bereidingstijd}m</span>` : ''}
           ${(wm.meal.tags || []).slice(0, 1).map(t => html`<span class="chip">${t}</span>`)}
+          ${slot.id === 'diner' && wm.meal.recipe ? html`<span class="chip leaf">recept ✓</span>` : ''}
         </div>
-        <div class="name" @click=${() => openPicker(slug, slot.id)}>${wm.meal.name}</div>
+        <div class="name">${wm.meal.name}</div>
         ${wm.meal.kcal ? html`
           <div class="cmt">
             ${wm.meal.kcal} kcal${wm.meal.eiwit_g ? ` · ${wm.meal.eiwit_g}g eiwit` : ''}${wm.meal.koolh_g ? ` · ${wm.meal.koolh_g}g koolh` : ''}${wm.meal.vet_g ? ` · ${wm.meal.vet_g}g vet` : ''}
@@ -331,7 +345,7 @@ function renderSlotRow(slot, slotInfo, slug, wm, showPerson = false) {
         ` : ''}
         ${ingNames.length ? html`<div class="ing">${ingNames.join(', ')}</div>` : ''}
       </div>
-      <button class="btn ghost recept-btn" @click=${(e) => { e.stopPropagation(); clearSlot(slug, slot.id); }} title="verwijder">×</button>
+      <span class="cmt detail-hint">tap voor ${slot.id === 'diner' ? 'recept' : 'details'} →</span>
     </div>
   `;
 }

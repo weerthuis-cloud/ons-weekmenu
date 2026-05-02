@@ -4,6 +4,7 @@ import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { DAGEN_KORT, DAGEN, todayInfo, formatWeekRange, weekDates, formatDate } from '../lib/datums.js';
 import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, onDataChange } from '../lib/data.js';
 import { openMealPicker } from '../components/meal-picker.js';
+import { openMealDetail } from '../components/meal-detail.js';
 import { MealCard } from '../components/meal-card.js';
 import { Sparkline } from '../components/sparkline.js';
 import { SlotIcon } from '../components/slot-icon.js';
@@ -102,6 +103,16 @@ async function clearSlot(slug, day, slot) {
   if (!week) return;
   await removeWeekMeal({ weekId: week.id, day, slot });
   await loadAll();
+}
+
+// Klik op een gevulde cell → toon detail (recept of ingrediënten). Vervangen of wissen via knoppen.
+function openDetail(slug, wm, day, slot) {
+  openMealDetail({
+    slot,
+    wm,
+    onReplace: () => openPicker(slug, day, slot),
+    onClear:   () => clearSlot(slug, day, slot),
+  });
 }
 
 // Aggregate kcal per dag voor sparkline (alleen voor de gekozen persoon)
@@ -448,14 +459,13 @@ function renderSlotCell(day, slot, persoon) {
 
 function renderMiniCard(slug, wm, day, slot, showPerson = false) {
   return html`
-    <div class="meal-mini" @click=${() => openPicker(slug, day, slot)}>
+    <div class="meal-mini" @click=${() => openDetail(slug, wm, day, slot)}>
       <div class="ph-row">
         ${SlotIcon({ slot, size: 14 })}
         ${showPerson ? html`<span class="person-tag ${slug}">${slug === 'peter' ? 'P' : 'M'}</span>` : ''}
       </div>
       <span class="name">${wm.meal.name}</span>
       ${wm.meal.kcal ? html`<span class="cmt">${wm.meal.kcal}k</span>` : ''}
-      <button class="x" title="verwijder" @click=${(e) => { e.stopPropagation(); clearSlot(slug, day, slot); }}>×</button>
     </div>
   `;
 }
