@@ -3,6 +3,7 @@ import { render } from 'lit-html';
 import { Shell } from './shell.js';
 import { LoginView } from './views/login.js';
 import { OnboardingView } from './views/onboarding.js';
+import { PasswordRecoveryView } from './views/password-recovery.js';
 import { initRouter, getRoute } from './router.js';
 import { initAuth, onAuthChange, getAuthState, signOut } from './lib/auth.js';
 import { todayInfo } from './lib/datums.js';
@@ -32,6 +33,8 @@ function pickView() {
   switch (state.auth.status) {
     case 'loading':
       return loadingView();
+    case 'recovery':
+      return PasswordRecoveryView(state, actions, rerender);
     case 'anonymous':
     case 'denied':
       return LoginView(state, actions, rerender);

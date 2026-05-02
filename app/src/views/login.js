@@ -1,43 +1,60 @@
 import { html } from 'lit-html';
-import { signInWithEmail } from '../lib/auth.js';
+import { signInWithPassword, sendPasswordReset } from '../lib/auth.js';
 
 const ui = {
   email: '',
-  sending: false,
-  sent: false,
+  password: '',
+  busy: false,
+  mode: 'login',          // 'login' | 'reset'
+  resetSent: false,
   error: null,
 };
 
 export function LoginView(state, actions, rerender) {
   async function submit(e) {
     e.preventDefault();
-    ui.sending = true;
+    ui.busy = true;
     ui.error = null;
     rerender();
     try {
-      await signInWithEmail(ui.email);
-      ui.sent = true;
+      if (ui.mode === 'login') {
+        await signInWithPassword(ui.email, ui.password);
+        // Bij succes: onAuthChange → Shell verschijnt; geen extra UI nodig.
+      } else {
+        await sendPasswordReset(ui.email);
+        ui.resetSent = true;
+      }
     } catch (err) {
-      ui.error = err.message || 'Onbekende fout bij inloggen.';
+      ui.error = err.message || 'Onbekende fout.';
     } finally {
-      ui.sending = false;
+      ui.busy = false;
       rerender();
     }
   }
+
+  function switchMode(next) {
+    ui.mode = next;
+    ui.error = null;
+    ui.resetSent = false;
+    rerender();
+  }
+
+  const isReset = ui.mode === 'reset';
 
   return html`
     <section class="auth-shell">
       <div class="auth-card card">
         <header class="auth-head">
           <h1 class="display">ons weekmenu</h1>
-          <p class="lead">Log in met je e-mailadres. Je krijgt een magic link toegestuurd.</p>
+          <p class="lead">${isReset ? 'Vul je e-mail in. Je krijgt een mail om je wachtwoord opnieuw in te stellen.' : 'Log in met je e-mail en wachtwoord.'}</p>
         </header>
 
-        ${ui.sent ? html`
+        ${ui.resetSent ? html`
           <div class="ok">
             <strong>Mail onderweg.</strong>
-            <p>Check je inbox op <span class="mono">${ui.email}</span> en klik op de link om in te loggen.</p>
+            <p>Check je inbox op <span class="mono">${ui.email}</span> en klik op de link om een nieuw wachtwoord te kiezen.</p>
           </div>
+          <button class="btn ghost" @click=${() => switchMode('login')}>← terug naar inloggen</button>
         ` : html`
           <form @submit=${submit}>
             <label>
@@ -49,16 +66,39 @@ export function LoginView(state, actions, rerender) {
                 .value=${ui.email}
                 @input=${(e) => { ui.email = e.target.value; }}
                 placeholder="naam@voorbeeld.nl"
+                autocomplete="username"
               />
             </label>
+
+            ${!isReset ? html`
+              <label>
+                <span>Wachtwoord</span>
+                <input
+                  type="password"
+                  required
+                  .value=${ui.password}
+                  @input=${(e) => { ui.password = e.target.value; }}
+                  autocomplete="current-password"
+                  minlength="6"
+                />
+              </label>
+            ` : ''}
+
             ${ui.error ? html`<div class="err">${ui.error}</div>` : null}
-            <button class="btn" type="submit" ?disabled=${ui.sending}>
-              ${ui.sending ? 'Verzenden…' : 'Stuur magic link'}
+
+            <button class="btn" type="submit" ?disabled=${ui.busy}>
+              ${ui.busy ? 'Bezig…' : (isReset ? 'Stuur reset-mail' : 'Inloggen')}
             </button>
+
+            <div class="links">
+              ${isReset
+                ? html`<button type="button" class="linkbtn" @click=${() => switchMode('login')}>← inloggen</button>`
+                : html`<button type="button" class="linkbtn" @click=${() => switchMode('reset')}>wachtwoord vergeten?</button>`}
+            </div>
           </form>
         `}
 
-        <footer class="hint mono">v0.2 • alleen toegestane e-mails</footer>
+        <footer class="hint mono">v1.0 • alleen toegestane e-mails</footer>
       </div>
 
       <style>
@@ -99,6 +139,13 @@ export function LoginView(state, actions, rerender) {
           border-radius: var(--r-md);
         }
         .ok p { margin: 6px 0 0; }
+        .links { display: flex; justify-content: center; }
+        .linkbtn {
+          background: transparent; border: none;
+          color: var(--ink-2); font: inherit; font-size: 13px;
+          cursor: pointer; text-decoration: underline;
+        }
+        .linkbtn:hover { color: var(--ink); }
         .hint { color: var(--ink-3); font-size: 11px; align-self: center; }
       </style>
     </section>

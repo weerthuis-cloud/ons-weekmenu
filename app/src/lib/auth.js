@@ -78,23 +78,53 @@ export async function initAuth() {
   const { data: { session } } = await supabase.auth.getSession();
   await handleSession(session);
 
-  // Reageer op login/logout in dezelfde tab of via magic link
-  supabase.auth.onAuthStateChange((_event, session) => {
+  // Reageer op login/logout en password-recovery
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      // Supabase heeft de recovery-token in de URL gezien en een tijdelijke session opgezet.
+      // We tonen het wachtwoord-set-formulier in plaats van de app.
+      setState({ status: 'recovery', user: session?.user ?? null, profile: null, error: null });
+      return;
+    }
     handleSession(session);
   });
 }
 
-export async function signInWithEmail(email) {
+export async function signInWithPassword(email, password) {
   if (!supabase) throw new Error('Supabase niet geconfigureerd.');
   const trimmed = email.trim().toLowerCase();
   if (ALLOWED_EMAILS.length > 0 && !ALLOWED_EMAILS.includes(trimmed)) {
     throw new Error('Dit e-mailadres staat niet op de toegestane lijst.');
   }
-  const { error } = await supabase.auth.signInWithOtp({
+  if (!password) throw new Error('Wachtwoord verplicht.');
+  const { error } = await supabase.auth.signInWithPassword({
     email: trimmed,
-    options: {
-      emailRedirectTo: window.location.origin + window.location.pathname,
-    },
+    password,
+  });
+  if (error) throw error;
+}
+
+// Wijzig wachtwoord van de huidige (recovery-)session.
+export async function updatePassword(newPassword) {
+  if (!supabase) throw new Error('Supabase niet geconfigureerd.');
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('Wachtwoord moet minimaal 6 tekens zijn.');
+  }
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+  // Trigger volledige session-refresh (status → ready)
+  const { data: { session } } = await supabase.auth.getSession();
+  await handleSession(session);
+}
+
+export async function sendPasswordReset(email) {
+  if (!supabase) throw new Error('Supabase niet geconfigureerd.');
+  const trimmed = email.trim().toLowerCase();
+  if (ALLOWED_EMAILS.length > 0 && !ALLOWED_EMAILS.includes(trimmed)) {
+    throw new Error('Dit e-mailadres staat niet op de toegestane lijst.');
+  }
+  const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+    redirectTo: window.location.origin + window.location.pathname,
   });
   if (error) throw error;
 }
