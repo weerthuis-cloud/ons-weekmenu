@@ -593,7 +593,7 @@ export function ShoppingView(state) {
       .item-row:hover { background: var(--bg-2); }
       .item-row.is-done { opacity: 0.45; }
       .item-row.is-highlighted { background: var(--bg-2); }
-      .row-mark { color: var(--ink); font-weight: 700; font-size: 12px; width: 10px; text-align: center; flex-shrink: 0; }
+      .row-mark { font-weight: 700; font-size: 14px; width: 10px; text-align: center; flex-shrink: 0; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
       .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; }
       .item-row .name { font-size: 14px; font-weight: 500; }
@@ -1020,7 +1020,7 @@ function renderCategoryCard(group, allItems) {
           const openSource = itemHighlightedByOpenRecipe(item);
           return html`
             <li class="item-row ${item.checked ? 'is-done' : ''} ${openSource ? 'is-highlighted' : ''}">
-              ${openSource ? html`<span class="row-mark" aria-hidden="true">▸</span>` : ''}
+              ${openSource ? html`<span class="row-mark" style="color:${dayColor(openSource.day)};" aria-hidden="true">▸</span>` : ''}
               <span @click=${() => toggleChecked(idx)}>
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
               </span>
