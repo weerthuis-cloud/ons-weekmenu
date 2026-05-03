@@ -356,3 +356,77 @@ Daarna: elke push deployt automatisch.
 - "Voorraad" (wat-heb-ik-in-huis) features uit prototype.
 
 ---
+
+## 2026-05-02 — v1.2: diner-recepten in boodschappenlijst, geschaald op aantal eters
+
+**Probleem.** Boodschappenlijst miste de ingrediënten van de avondrecepten. Recepten zijn voor 4 personen, terwijl Peter en Miranda meestal met z'n tweeën eten (soms drie).
+
+**Beslissing.** Schema-uitbreiding (Option 1 "structureel netjes"):
+- `meals.serves int` toegevoegd. Voor de 7 diner-recepten op 4 gezet, ingrediënten in `meals.ingredients` ingevuld op 4-persoons hoeveelheden.
+- `week_meals.porties` herinterpretatie: voor diner = "aantal eters voor deze maaltijd" (default 2 voor nieuwe records; bestaande records ook op 2 gezet).
+
+**Aggregator (lib/shopping.js).**
+- Recipe-meals (`meal.serves > 0`): records van Peter en Miranda voor zelfde `(day, slot, meal_id)` worden gededupliceerd. Aggregator pakt MAX van hun porties (gedeelde pot, niet dubbel kopen).
+- Solo-meals (serves null, bv. ontbijt): ieder eet zijn eigen portie → SUM porties (oude gedrag).
+- Factor: `aggPorties / serves` per gededupliceerde entry.
+
+**UI ('Eters per diner').**
+- Paneel boven open items, rij per unieke diner-maaltijd (gededupliceerd), chips 1/2/3/4. Klik schrijft nieuwe waarde naar alle owner-records voor die maaltijd, herberekent boodschappen.
+- "Alles op 2"-reset.
+- Verborgen op print en als er geen diner-meals zijn.
+
+**Validatie (node-test in /tmp/test_agg.mjs).**
+- 2 personen Kip kerrie (recept voor 4): rijst 300g → 150g, broccoli 1000g → 500g ✓
+- 3 personen: 225g + 750g (factor 0.75) ✓
+- Solo-modus telt alleen die persoon ✓
+- Ontbijt (kwark, geen serves): 2 personen × 300g = 600g ✓ (sum, niet dedup)
+
+**Schema.sql bijgewerkt** met `recipe text` (was missing sinds v0.9) en `serves int`.
+
+**Open punt.** Bij ongelijke porties tussen Peter en Miranda voor zelfde maaltijd (Peter=2, Miranda=3) gebruikt aggregator MAX. Nu schrijft de chip-klik altijd identiek naar beide records, dus mismatch komt in praktijk alleen voor als iemand handmatig aan één record komt buiten dit paneel om. Acceptabel.
+
+---
+
+## 2026-05-02 — v1.3: per-recept akkoord-flow + dag-kleur tracking
+
+**Probleem.** v1.2 zette dineren automatisch in de boodschappenlijst, maar Peter wilde controle: per recept beslissen welke ingrediënten hij koopt (sommige heeft hij in huis), en zien welke ingrediënten bij welk recept horen.
+
+**Beslissing (na A/B keuze).** Optie A gekozen: per-recept akkoord-flow vervangt automatische aggregatie voor recipe-meals (serves > 0). Solo-meals (ontbijt etc.) blijven automatisch via aggregator.
+
+**Aggregator (lib/shopping.js).**
+- `aggregateShopping` skipt records met `meal.serves > 0`.
+- `source.qty` per ingredient wordt voortaan opgeslagen in basis-unit (g/ml/st), zodat helpers items schoon kunnen herberekenen bij toevoegen/verwijderen.
+- Nieuwe pure helpers: `scaleRecipeIngredients(meal, porties)`, `mergeRecipeIntoItems(items, {...})`, `removeRecipeFromItems(items, recipeKey)`, `approvedRecipeKeys(items)`, `approvedIngredientNamesForRecipe(items, key)`, `recipeKeyOf(day, mealId)`.
+- Items hebben nu `sources[]` met `recipeKey`, `qty` per bron. Item.qty = sum van source.qty.
+
+**UI (views/shopping.js).**
+- Recept-titel in 'Eters per diner'-paneel klikbaar, toggle expand. Open recept toont ingrediënten geschaald op huidige porties met checkboxes (default aan = naar lijst).
+- Akkoord-knop merget items naar `shopping_list.items` met `source.recipeKey`. Knop heet "Bijwerken" zodra akkoord ooit gegeven (recipeKey staat in items).
+- Verwijder-knop ontruimt items met die recipeKey.
+- Akkoord-badge (groen vinkje) verschijnt naast titel zodra approved.
+- Chip-wijziging na akkoord triggert auto re-akkoord met nieuwe porties — geen herhakkoord nodig.
+- Excludes (uitgevinkte ingrediënten) worden bij heropening hydraat uit items: ontbrekende ingrediënten = eerder uitgevinkt. Lokaal in `vs.recipes[key].excluded` (Set), `_hydrated` voorkomt reset bij re-render.
+
+**Boodschappenlijst-tracking.**
+- Per item-rij links een verticaal stripje per herkomst-dag (oklch hue per dag: ma=280, di=145, wo=28, do=85, vr=350, za=50, zo=175).
+- Bij open recept in paneel: items met `source.recipeKey == openKey` krijgen een border in dag-kleur (visueel oplichten).
+- Day-stripes ook voor solo-meal-bronnen (ontbijt op dag 3 = groene stripe op rij Kwark).
+
+**Validatie (node-test in /tmp/test_v13.mjs).**
+- Aggregator skipt recipes ✓
+- Scale schaalt correct (1 kg → 0.5 kg voor 2 personen) ✓
+- Merge in lege lijst werkt ✓
+- Re-merge zelfde recept met andere porties = vervangt (geen dubbel) ✓
+- Twee recepten met gedeelde ingredient = sommatie qty + 2 sources ✓
+- Remove ontruimt sources, drop items zonder sources ✓
+- approvedRecipeKeys / approvedIngredientNamesForRecipe geven juiste sets ✓
+
+**Header.**
+- "// week 19 · huishouden Peter" → "// week 19 · v1.3" via nieuwe `app/src/version.js`. Eén plek voor versiebump.
+
+**Open punten.**
+- Recipe-flow werkt alleen voor diner-meals (waar serves is gezet). Solo-meals (ontbijt) blijven automatisch — geen akkoord-stap. Consistent met "akkoord = recept-keuze".
+- Bij wisseling van modus (huishouden → peter) blijft items met andere modus' herkomst staan. In praktijk geen issue want recepten zijn meestal voor het hele huishouden.
+- Visuele highlight van gelinkte items werkt alleen bij geopend recept. Geen permanente "uit dit recept"-indicator buiten de stripes (die zijn al genoeg).
+
+---

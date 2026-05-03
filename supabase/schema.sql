@@ -29,6 +29,8 @@ create table if not exists public.meals (
   tags            text[] not null default '{}', -- 'snel','vegetarisch','warm', etc.
   suitable_for    text[] not null default '{beiden}', -- {'peter'}, {'miranda'}, {'beiden'} of meerdere
   seizoen         text[] not null default '{}', -- 'lente','zomer','herfst','winter'
+  recipe          text,                       -- v0.9: bereidingsinstructie / receptbijlage
+  serves          int,                        -- v1.2: voor hoeveel personen het recept bedoeld is (null = solo-meal)
   created_by      uuid references public.profiles(id),
   created_at      timestamptz not null default now(),
   deleted_at      timestamptz null   -- soft-delete: blijft in oude weken zichtbaar, weg uit bibliotheek

@@ -2,12 +2,30 @@
 import { html } from 'lit-html';
 import { ROUTES } from './router.js';
 import { Logo } from './components/logo.js';
+import { VERSION } from './version.js';
+import { installSwipeNavigation } from './lib/swipe.js';
 import { WeekView }     from './views/week.js';
 import { DayView }      from './views/day.js';
 import { ShoppingView } from './views/shopping.js';
 import { LibraryView }  from './views/library.js';
 import { BuildView }    from './views/build.js';
 import { ImportView }   from './views/import.js';
+
+// v1.4: install horizontale swipe-navigatie eenmalig na eerste render.
+// We doen dit lazy via een MutationObserver op #app zodat we wachten tot
+// de Shell's <main class="content"> in de DOM staat.
+let _swipeInstalled = false;
+function ensureSwipe() {
+  if (_swipeInstalled) return;
+  const main = document.querySelector('main.content');
+  if (!main) return;
+  installSwipeNavigation(main, {
+    routes: ['week', 'dag', 'lijst'],
+    getCurrent: () => (window.location.hash || '#week').replace(/^#/, '').split('?')[0],
+    setRoute:   (id) => { window.location.hash = id; },
+  });
+  _swipeInstalled = true;
+}
 
 const VIEW_MAP = {
   week:    WeekView,
@@ -38,6 +56,8 @@ export function Shell(state, actions) {
   const profile = state.auth.profile;
   const initials = (profile?.naam || '?').slice(0, 2).toUpperCase();
   const weekLabel = state.viewWeek ?? '?';
+  // Lazy-bind swipe-navigatie na render
+  queueMicrotask(ensureSwipe);
 
   return html`
     <header class="topbar">
@@ -47,6 +67,7 @@ export function Shell(state, actions) {
           <span class="brand-full">ons weekmenu</span>
           <span class="brand-short">OWM</span>
         </h1>
+        <span class="brand-version cmt">${VERSION}</span>
       </div>
 
       <nav class="nav-pills" aria-label="Schermen">
@@ -57,7 +78,7 @@ export function Shell(state, actions) {
       </nav>
 
       <div class="topbar-right">
-        <span class="cmt week-info">// week ${weekLabel} · huishouden ${profile?.naam ?? '?'}</span>
+        <span class="cmt week-info">// week ${weekLabel} · ${VERSION}</span>
         <div class="persoon-toggle" role="tablist" aria-label="Welk menu">
           ${PERSONEN.map(p => html`
             <button
@@ -89,6 +110,7 @@ export function Shell(state, actions) {
       .brand { display: flex; align-items: center; gap: 10px; }
       .brand-title { font-size: 22px; letter-spacing: -0.03em; }
       .brand-short { display: none; }
+      .brand-version { font-size: 10px; padding: 2px 6px; background: var(--bg-2); border-radius: 999px; color: var(--ink-3); }
 
       .nav-pills {
         display: flex;

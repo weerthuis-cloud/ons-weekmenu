@@ -178,7 +178,9 @@ export async function getWeekMeals(weekId) {
   return data || [];
 }
 
-export async function setWeekMeal({ weekId, day, slot, mealId, porties = 1.0 }) {
+export async function setWeekMeal({ weekId, day, slot, mealId, porties }) {
+  // v1.2: default porties voor diner = 2 (eters thuis), anders 1.
+  const finalPorties = porties ?? (slot === 'diner' ? 2 : 1);
   // Upsert via delete + insert (vermijd ON CONFLICT-perikelen met composite unique).
   await supabase
     .from('week_meals')
@@ -188,13 +190,38 @@ export async function setWeekMeal({ weekId, day, slot, mealId, porties = 1.0 }) 
     .eq('slot', slot);
   const { data, error } = await supabase
     .from('week_meals')
-    .insert({ week_id: weekId, day, slot, meal_id: mealId, porties })
+    .insert({ week_id: weekId, day, slot, meal_id: mealId, porties: finalPorties })
     .select('id, week_id, day, slot, porties, meal:meals(*)')
     .single();
   if (error) throw error;
   cache.weekMeals.delete(weekId);
   notify('week_meals');
   return data;
+}
+
+// v1.2: porties van een bestaand week_meals-record updaten (UI: 'Eters per diner').
+export async function setWeekMealPorties({ id, weekId, porties }) {
+  const { error } = await supabase
+    .from('week_meals')
+    .update({ porties })
+    .eq('id', id);
+  if (error) throw error;
+  if (weekId) cache.weekMeals.delete(weekId);
+  notify('week_meals');
+}
+
+// v1.3: bulk-update porties voor meerdere records tegelijk. Voorkomt race
+// condition waarbij N losse setWeekMealPorties calls N×notify triggeren en
+// tussentijds half-bijgewerkte DB-state inlezen.
+export async function setWeekMealsPorties({ ids, weekIds, porties }) {
+  if (!ids?.length) return;
+  const { error } = await supabase
+    .from('week_meals')
+    .update({ porties })
+    .in('id', ids);
+  if (error) throw error;
+  for (const wid of (weekIds || [])) cache.weekMeals.delete(wid);
+  notify('week_meals');
 }
 
 // Verplaats een meal naar een andere dag (zelfde slot, zelfde week).

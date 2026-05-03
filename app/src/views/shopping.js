@@ -1,12 +1,15 @@
 // Boodschappenlijst v0.6: prototype-stijl met 4-kolom hero + filter-chips + winkel-cards.
 import { html, nothing } from 'lit-html';
-import { todayInfo, formatWeekRange, formatWeekRangeCompact } from '../lib/datums.js';
+import { todayInfo, formatWeekRange, formatWeekRangeCompact, DAGEN_KORT } from '../lib/datums.js';
 import { listProfiles, getWeek, getWeekMeals,
          getShoppingList, createShoppingList, updateShoppingList, deleteShoppingList,
          listOpenNotes, addNote, dismissNote, markNoteAdded,
+         setWeekMealPorties, setWeekMealsPorties,
          onDataChange } from '../lib/data.js';
 import { classifyIngredient } from '../lib/categorie.js';
-import { aggregateShopping, groupByCategory, groupByStore, itemKey } from '../lib/shopping.js';
+import { aggregateShopping, groupByCategory, groupByStore, itemKey,
+         scaleRecipeIngredients, mergeRecipeIntoItems, removeRecipeFromItems,
+         approvedRecipeKeys, approvedIngredientNamesForRecipe, recipeKeyOf } from '../lib/shopping.js';
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { Checkbox } from '../components/checkbox.js';
@@ -30,11 +33,17 @@ const vs = {
   items: [],
   initialized: false,
   editingKey: null,     // itemKey van item dat momenteel in qty-edit mode staat
+  // v1.3: per-recept UI-state (recipeKey → { expanded, excluded:Set<originalName> })
+  recipes: {},
   // Notities
   notes: [],
   noteInput: '',
   notesOpen: true,
 };
+
+// v1.3: dag-kleuren (oklch hue per dag-index 1-7).
+const DAY_HUE = { 1: 280, 2: 145, 3: 28, 4: 85, 5: 350, 6: 50, 7: 175 };
+function dayColor(day) { return `oklch(70% 0.16 ${DAY_HUE[day] || 240})`; }
 
 function ensureInit() {
   if (vs.initialized) return;
@@ -225,6 +234,165 @@ async function deleteList() {
   vs.list = null; vs.items = []; rerender();
 }
 
+// v1.2/1.3: groepeer diner-week_meals per (day, meal_id) zodat gedeelde
+// maaltijden (Peter + Miranda hebben hetzelfde recept) als één rij verschijnen.
+// Per groep bewaren we ook het meal-object (voor scaleRecipeIngredients).
+function buildDinerGroups() {
+  const owners = vs.modus === 'huishouden' ? ['peter','miranda'] : [vs.modus];
+  const map = new Map();
+  for (const owner of owners) {
+    for (const wm of (vs.meals[owner] || [])) {
+      if (wm.slot !== 'diner' || !wm.meal) continue;
+      const key = `${wm.day}::${wm.meal.id}`;
+      const porties = Number(wm.porties ?? 1);
+      const ownerRec = { id: wm.id, owner, weekId: vs.weeks[owner]?.id };
+      if (!map.has(key)) {
+        map.set(key, {
+          day: wm.day,
+          mealId: wm.meal.id,
+          mealName: wm.meal.name,
+          meal: wm.meal,
+          records: [ownerRec],
+          porties,
+          ownerSet: new Set([owner]),
+        });
+      } else {
+        const g = map.get(key);
+        g.records.push(ownerRec);
+        g.ownerSet.add(owner);
+        g.porties = Math.max(g.porties, porties);
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.day - b.day || a.mealName.localeCompare(b.mealName));
+}
+
+async function setGroupPorties(group, n) {
+  // Optimistisch lokaal updaten (alle owner-records van deze maaltijd).
+  for (const rec of group.records) {
+    vs.meals[rec.owner] = vs.meals[rec.owner].map(wm =>
+      wm.id === rec.id ? { ...wm, porties: n } : wm
+    );
+  }
+  group.porties = n;
+  rerender();
+  try {
+    // v1.3 bulk-update voorkomt race-condition (zie data.js).
+    const ids = group.records.map(r => r.id);
+    const weekIds = [...new Set(group.records.map(r => r.weekId).filter(Boolean))];
+    await setWeekMealsPorties({ ids, weekIds, porties: n });
+    // Als dit recept al akkoord was, herrekenen met nieuwe porties.
+    const recipeKey = recipeKeyOf(group.day, group.mealId);
+    if (approvedRecipeKeys(vs.items).has(recipeKey)) {
+      await approveRecipe(group);
+    } else {
+      await generateOrRefresh();
+    }
+  } catch (err) {
+    vs.error = err.message; rerender();
+  }
+}
+
+// v1.3: per-recept akkoord-flow
+function toggleRecipeExpand(group) {
+  const key = recipeKeyOf(group.day, group.mealId);
+  if (!vs.recipes[key]) vs.recipes[key] = { expanded: false, excluded: new Set() };
+  vs.recipes[key].expanded = !vs.recipes[key].expanded;
+  rerender();
+}
+
+function toggleIngredient(group, ingredientName) {
+  const key = recipeKeyOf(group.day, group.mealId);
+  if (!vs.recipes[key]) vs.recipes[key] = { expanded: true, excluded: new Set() };
+  const ex = vs.recipes[key].excluded;
+  if (ex.has(ingredientName)) ex.delete(ingredientName);
+  else ex.add(ingredientName);
+  rerender();
+}
+
+async function approveRecipe(group) {
+  const recipeKey = recipeKeyOf(group.day, group.mealId);
+  const state = vs.recipes[recipeKey] || { expanded: true, excluded: new Set() };
+  const scaled = scaleRecipeIngredients(group.meal, group.porties);
+  const filtered = scaled.filter(ing => !state.excluded.has(ing.name));
+  const who = [...group.ownerSet];
+
+  const newItems = mergeRecipeIntoItems(vs.items, {
+    recipeKey,
+    day: group.day,
+    mealName: group.mealName,
+    who,
+    scaledIngredients: filtered,
+  });
+
+  vs.items = newItems;
+  rerender();
+  try {
+    if (vs.list) {
+      vs.list = await updateShoppingList({ id: vs.list.id, items: newItems });
+    } else {
+      const weekIds = activeWeekIds();
+      if (weekIds.length === 0) throw new Error('Geen week geselecteerd voor de lijst.');
+      vs.list = await createShoppingList({
+        ownerId: appState.auth.profile.id, weekIds, items: newItems,
+      });
+    }
+    vs.items = vs.list.items;
+    // markeer hydrated zodat heropenen geen reset doet
+    if (vs.recipes[recipeKey]) vs.recipes[recipeKey]._hydrated = true;
+    rerender();
+  } catch (err) {
+    vs.error = err.message; rerender();
+  }
+}
+
+async function unapproveRecipe(group) {
+  const recipeKey = recipeKeyOf(group.day, group.mealId);
+  if (!vs.list) return;
+  const newItems = removeRecipeFromItems(vs.items, recipeKey);
+  vs.items = newItems;
+  delete vs.recipes[recipeKey];   // reset UI-state
+  rerender();
+  try {
+    vs.list = await updateShoppingList({ id: vs.list.id, items: newItems });
+    vs.items = vs.list.items;
+    rerender();
+  } catch (err) {
+    vs.error = err.message; rerender();
+  }
+}
+
+async function resetAllDinerToTwo() {
+  const groups = buildDinerGroups();
+  const allIds = [];
+  const allWeekIds = new Set();
+  for (const g of groups) {
+    if (g.porties === 2) continue;
+    for (const rec of g.records) {
+      vs.meals[rec.owner] = vs.meals[rec.owner].map(wm =>
+        wm.id === rec.id ? { ...wm, porties: 2 } : wm
+      );
+      allIds.push(rec.id);
+      if (rec.weekId) allWeekIds.add(rec.weekId);
+    }
+    g.porties = 2;
+  }
+  rerender();
+  if (allIds.length === 0) return;
+  try {
+    await setWeekMealsPorties({ ids: allIds, weekIds: [...allWeekIds], porties: 2 });
+    // Re-akkoord alle al-akkoorde recepten met nieuwe porties
+    const approved = approvedRecipeKeys(vs.items);
+    for (const g of groups) {
+      const key = recipeKeyOf(g.day, g.mealId);
+      if (approved.has(key)) await approveRecipe(g);
+    }
+    await generateOrRefresh();
+  } catch (err) {
+    vs.error = err.message; rerender();
+  }
+}
+
 function setModus(modus) { vs.modus = modus; loadAll(); }
 function setStoreFilter(s) { vs.storeFilter = s; rerender(); }
 function changeWeek(delta) {
@@ -304,6 +472,8 @@ export function ShoppingView(state) {
           <button class="chip" @click=${() => changeWeek(1)}>Wk ${vs.week + 1 > 52 ? 1 : vs.week + 1} →</button>
         </div>
       </div>
+
+      ${renderDinerPortions()}
 
       ${vs.error ? html`<div class="err">${vs.error}</div>` : nothing}
 
@@ -417,11 +587,15 @@ export function ShoppingView(state) {
         display: flex; align-items: center; gap: 10px;
         padding: 8px 6px;
         border-radius: 8px;
+        border: 2px solid transparent;
         cursor: pointer;
-        transition: background .15s;
+        transition: background .15s, border-color .2s;
       }
       .item-row:hover { background: var(--bg-2); }
       .item-row.is-done { opacity: 0.45; }
+      .item-row.is-highlighted { border-style: solid; background: var(--bg-2); }
+      .day-strip { display: inline-flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+      .day-stripe { width: 4px; height: 6px; border-radius: 2px; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
       .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; }
       .item-row .name { font-size: 14px; font-weight: 500; }
@@ -512,6 +686,113 @@ export function ShoppingView(state) {
       .person-tag.peter { background: var(--peter); }
       .person-tag.miranda { background: var(--miranda); }
 
+      /* v1.2 'Eters per diner' / v1.3 recepten-paneel */
+      .diner-portions {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--r-lg);
+        padding: 14px 18px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .dp-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px;
+      }
+      .dp-head .btn.small { height: 28px; padding: 0 10px; font-size: 11px; }
+      .dp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+      .dp-row-wrap {
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .dp-row-wrap.is-open { background: var(--bg-2); }
+      .dp-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 6px;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .dp-row:hover { background: var(--bg-2); }
+      .dp-day-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .dp-day {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-3);
+        min-width: 24px;
+        text-transform: uppercase;
+      }
+      .dp-name { font-weight: 500; flex: 0 1 auto; }
+      .dp-badge {
+        background: var(--leaf, oklch(70% 0.16 145));
+        color: var(--bg);
+        font-size: 10px; font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-family: var(--mono);
+      }
+      .dp-spacer { flex: 1; }
+      .dp-caret { color: var(--ink-3); font-size: 11px; padding-left: 4px; }
+      .dp-chips { display: flex; gap: 3px; }
+      .dp-chip {
+        font-family: var(--mono);
+        font-size: 12px;
+        width: 28px; height: 28px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--ink-2);
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0;
+      }
+      .dp-chip:hover { border-color: var(--ink); }
+      .dp-chip.is-on {
+        background: var(--ink); color: var(--bg); border-color: var(--ink);
+        font-weight: 700;
+      }
+
+      /* v1.3 expand-paneel */
+      .recipe-expand {
+        background: var(--bg);
+        border-left: 4px solid;
+        border-radius: 0 8px 8px 0;
+        margin: 4px 0 6px 18px;
+        padding: 12px 14px;
+      }
+      .recipe-ings { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+      .recipe-ing {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 4px;
+        font-size: 13px;
+      }
+      .recipe-ing.is-excluded { opacity: 0.45; }
+      .recipe-ing.is-excluded .ri-name,
+      .recipe-ing.is-excluded .ri-qty { text-decoration: line-through; }
+      .ri-cb { display: inline-flex; cursor: pointer; }
+      .ri-name { flex: 1; }
+      .ri-qty { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+      .recipe-actions {
+        display: flex; gap: 8px; align-items: center;
+        flex-wrap: wrap;
+      }
+      .recipe-actions .btn { white-space: nowrap; }
+      .recipe-actions .btn.small { height: 28px; padding: 0 10px; font-size: 11px; }
+
+      @media (max-width: 720px) {
+        .dp-row { flex-wrap: wrap; }
+        .dp-name { flex: 1 1 100%; order: 3; padding-left: 22px; margin-top: -2px; }
+        .dp-day-dot { order: 1; }
+        .dp-day { order: 2; }
+        .dp-spacer { display: none; }
+        .dp-chips { order: 4; margin-left: auto; }
+        .dp-caret { order: 5; }
+        .dp-badge { order: 2; }
+        .recipe-expand { margin-left: 8px; padding: 10px; }
+      }
+
       @media (max-width: 960px) {
         .hero-row { grid-template-columns: 1fr 1fr; }
       }
@@ -546,6 +827,101 @@ export function ShoppingView(state) {
         .item-row { padding: 4px 0; }
       }
     </style>
+  `;
+}
+
+function renderDinerPortions() {
+  const groups = buildDinerGroups();
+  if (groups.length === 0) return nothing;
+  const approved = approvedRecipeKeys(vs.items);
+  return html`
+    <div class="diner-portions no-print">
+      <div class="dp-head">
+        <div class="cmt">// recepten — open een titel om ingrediënten te kiezen en akkoord te geven</div>
+        <button class="btn ghost small" @click=${resetAllDinerToTwo}>alles op 2</button>
+      </div>
+      <ul class="dp-list">
+        ${groups.map(g => {
+          const cur = Number(g.porties);
+          const key = recipeKeyOf(g.day, g.mealId);
+          const state = vs.recipes[key];
+          const expanded = !!state?.expanded;
+          const isApproved = approved.has(key);
+          const dayCol = dayColor(g.day);
+          return html`
+            <li class="dp-row-wrap ${expanded ? 'is-open' : ''} ${isApproved ? 'is-approved' : ''}">
+              <div class="dp-row" @click=${() => toggleRecipeExpand(g)}>
+                <span class="dp-day-dot" style="background:${dayCol};"></span>
+                <span class="dp-day">${DAGEN_KORT[g.day - 1] || ('d' + g.day)}</span>
+                <span class="dp-name">${g.mealName}</span>
+                ${isApproved ? html`<span class="dp-badge" title="recept staat in de boodschappenlijst">✓</span>` : ''}
+                <span class="dp-spacer"></span>
+                <div class="dp-chips" @click=${(e) => e.stopPropagation()}>
+                  ${[1, 2, 3, 4].map(n => html`
+                    <button
+                      class="dp-chip ${cur === n ? 'is-on' : ''}"
+                      @click=${() => setGroupPorties(g, n)}
+                      title="${n} ${n === 1 ? 'eter' : 'eters'}"
+                    >${n}</button>
+                  `)}
+                </div>
+                <span class="dp-caret">${expanded ? '▾' : '▸'}</span>
+              </div>
+              ${expanded ? renderRecipeExpand(g) : nothing}
+            </li>
+          `;
+        })}
+      </ul>
+    </div>
+  `;
+}
+
+function renderRecipeExpand(group) {
+  const key = recipeKeyOf(group.day, group.mealId);
+  const state = vs.recipes[key] = vs.recipes[key] || { expanded: true, excluded: new Set() };
+  const scaled = scaleRecipeIngredients(group.meal, group.porties);
+  const isApproved = approvedRecipeKeys(vs.items).has(key);
+
+  // Hydrate excluded uit items eenmalig: ingrediënten die niet in lijst staan
+  // waren eerder uitgevinkt.
+  if (!state._hydrated && isApproved) {
+    const approvedNames = approvedIngredientNamesForRecipe(vs.items, key);
+    const excl = new Set();
+    for (const ing of scaled) {
+      if (!approvedNames.has(ing.name)) excl.add(ing.name);
+    }
+    state.excluded = excl;
+    state._hydrated = true;
+  }
+
+  const hue = DAY_HUE[group.day] || 240;
+  return html`
+    <div class="recipe-expand" style="border-left-color:${dayColor(group.day)};">
+      <ul class="recipe-ings">
+        ${scaled.map(ing => {
+          const isExcluded = state.excluded.has(ing.name);
+          return html`
+            <li class="recipe-ing ${isExcluded ? 'is-excluded' : ''}">
+              <span class="ri-cb" @click=${() => toggleIngredient(group, ing.name)}>
+                ${Checkbox({ checked: !isExcluded, hue, onClick: () => toggleIngredient(group, ing.name) })}
+              </span>
+              <span class="ri-name">${ing.name}</span>
+              <span class="ri-qty">${ing.qtyBase != null ? formatQty(ing.qtyBase, ing.unitBase) : ''}</span>
+            </li>
+          `;
+        })}
+      </ul>
+      <div class="recipe-actions">
+        <button class="btn" @click=${() => approveRecipe(group)}>
+          ${isApproved ? 'Bijwerken' : 'Akkoord — voeg toe aan boodschappenlijst'}
+        </button>
+        ${isApproved ? html`
+          <button class="btn ghost small danger" @click=${() => unapproveRecipe(group)}>
+            verwijder uit lijst
+          </button>
+        ` : nothing}
+      </div>
+    </div>
   `;
 }
 
@@ -615,6 +991,24 @@ function renderDoneSection(doneItems, allItems) {
   `;
 }
 
+// v1.3: unieke dag-nummers waar dit item vandaan komt (alle sources samen)
+function itemDays(item) {
+  const days = new Set();
+  for (const s of (item.sources || [])) {
+    if (s.day) days.add(s.day);
+  }
+  return [...days].sort((a, b) => a - b);
+}
+
+// v1.3: is dit item gekoppeld aan een momenteel-uitgevouwen recept?
+function itemHighlightedByOpenRecipe(item) {
+  for (const s of (item.sources || [])) {
+    if (!s.recipeKey) continue;
+    if (vs.recipes[s.recipeKey]?.expanded) return s;
+  }
+  return null;
+}
+
 function renderCategoryCard(group, allItems) {
   return html`
     <div class="store-card">
@@ -633,8 +1027,14 @@ function renderCategoryCard(group, allItems) {
           const variantHint = item.variants && item.variants.length > 1
             ? `ook: ${item.variants.filter(v => v.toLowerCase() !== item.name.toLowerCase()).join(', ')}`
             : '';
+          const days = itemDays(item);
+          const openSource = itemHighlightedByOpenRecipe(item);
           return html`
-            <li class="item-row ${item.checked ? 'is-done' : ''}">
+            <li class="item-row ${item.checked ? 'is-done' : ''} ${openSource ? 'is-highlighted' : ''}"
+                style=${openSource ? `border-color:${dayColor(openSource.day)};` : ''}>
+              <span class="day-strip" aria-hidden="true">
+                ${days.map(d => html`<span class="day-stripe" style="background:${dayColor(d)};" title="${DAGEN_KORT[d-1] || ('d'+d)}"></span>`)}
+              </span>
               <span @click=${() => toggleChecked(idx)}>
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
               </span>

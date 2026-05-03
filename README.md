@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v1.0** (publiek deploybaar via GitHub Pages, primair workflow via Cowork).
+Huidige versie: **v1.4** (per-recept akkoord-flow + dag-kleurstreepjes; mobiel met swipe-navigatie tussen Week, Vandaag en Boodschappen).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -14,7 +14,14 @@ Versies in volgorde:
 - v0.5 archief (weken openen + dupliceren) + maker (bibliotheek met filters + edit/soft-delete) — klaar
 - v0.6 polish-pass: alle 5 views naar visuele taal van prototype — klaar
 - v0.7 PDF-import (Cowork-route primair, pdf.js client-side als fallback) — klaar
+- v0.8 boodschappenlijst: naam-normalisatie + categorie-groepering + handmatige qty — klaar
+- v0.9 recepten in maaltijden + detail-modal voor gevulde cells — klaar
 - v1.0 GitHub Pages deploy + final AVG-check — klaar
+- v1.0a–h notities-paneel, mobiele UX, wachtwoord-login, gedeeld auth-account, afgevinkt-sectie — klaar
+- v1.1 'naar keuze'-items, toppings-bijlage, verplaats+ruil binnen slot — klaar
+- v1.2 boodschappenlijst rekent diner-recepten mee, geschaald op aantal eters per maaltijd — klaar
+- v1.3 per-recept akkoord-flow met checkboxes voor in-huis-items, dag-kleur tracking in lijst — klaar
+- v1.4 mobiel: horizontale swipe-navigatie tussen Week / Vandaag / Boodschappen — klaar
 
 ## Architectuur
 
