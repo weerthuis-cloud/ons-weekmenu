@@ -587,15 +587,13 @@ export function ShoppingView(state) {
         display: flex; align-items: center; gap: 10px;
         padding: 8px 6px;
         border-radius: 8px;
-        border: 2px solid transparent;
         cursor: pointer;
-        transition: background .15s, border-color .2s;
+        transition: background .15s;
       }
       .item-row:hover { background: var(--bg-2); }
       .item-row.is-done { opacity: 0.45; }
-      .item-row.is-highlighted { border-style: solid; background: var(--bg-2); }
-      .day-strip { display: inline-flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
-      .day-stripe { width: 4px; height: 6px; border-radius: 2px; }
+      .item-row.is-highlighted { background: var(--bg-2); }
+      .row-mark { color: var(--ink); font-weight: 700; font-size: 12px; width: 10px; text-align: center; flex-shrink: 0; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
       .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; }
       .item-row .name { font-size: 14px; font-weight: 500; }
@@ -610,8 +608,9 @@ export function ShoppingView(state) {
         padding: 4px 8px;
         cursor: pointer;
         color: var(--ink-2);
-        min-width: 60px;
+        min-width: 80px;
         text-align: right;
+        flex-shrink: 0;
       }
       .qty-edit-btn:hover { border-color: var(--ink); color: var(--ink); }
       .qty-empty { color: var(--ink-3); font-style: italic; }
@@ -991,16 +990,7 @@ function renderDoneSection(doneItems, allItems) {
   `;
 }
 
-// v1.3: unieke dag-nummers waar dit item vandaan komt (alle sources samen)
-function itemDays(item) {
-  const days = new Set();
-  for (const s of (item.sources || [])) {
-    if (s.day) days.add(s.day);
-  }
-  return [...days].sort((a, b) => a - b);
-}
-
-// v1.3: is dit item gekoppeld aan een momenteel-uitgevouwen recept?
+// v1.3/1.5: is dit item gekoppeld aan een momenteel-uitgevouwen recept?
 function itemHighlightedByOpenRecipe(item) {
   for (const s of (item.sources || [])) {
     if (!s.recipeKey) continue;
@@ -1027,14 +1017,10 @@ function renderCategoryCard(group, allItems) {
           const variantHint = item.variants && item.variants.length > 1
             ? `ook: ${item.variants.filter(v => v.toLowerCase() !== item.name.toLowerCase()).join(', ')}`
             : '';
-          const days = itemDays(item);
           const openSource = itemHighlightedByOpenRecipe(item);
           return html`
-            <li class="item-row ${item.checked ? 'is-done' : ''} ${openSource ? 'is-highlighted' : ''}"
-                style=${openSource ? `border-color:${dayColor(openSource.day)};` : ''}>
-              <span class="day-strip" aria-hidden="true">
-                ${days.map(d => html`<span class="day-stripe" style="background:${dayColor(d)};" title="${DAGEN_KORT[d-1] || ('d'+d)}"></span>`)}
-              </span>
+            <li class="item-row ${item.checked ? 'is-done' : ''} ${openSource ? 'is-highlighted' : ''}">
+              ${openSource ? html`<span class="row-mark" aria-hidden="true">▸</span>` : ''}
               <span @click=${() => toggleChecked(idx)}>
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
               </span>
@@ -1042,6 +1028,10 @@ function renderCategoryCard(group, allItems) {
                 <span class="name">${item.name}</span>
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
               </div>
+              <span class="who">
+                ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
+                ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
+              </span>
               ${isEditing ? html`
                 <input
                   class="qty-edit-input"
@@ -1066,10 +1056,6 @@ function renderCategoryCard(group, allItems) {
                         : html`<span class="qty-empty">+ qty</span>`}
                 </button>
               `}
-              <span class="who">
-                ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
-                ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
-              </span>
             </li>
           `;
         })}

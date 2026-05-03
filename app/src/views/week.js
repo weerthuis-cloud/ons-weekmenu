@@ -381,12 +381,17 @@ export function WeekView(state) {
         .hero-main .lead { font-size: 12px; line-height: 1.4; max-width: none; margin-top: 6px; }
         .hero-main .chip-row { display: none; }
       }
+      .day-full { display: inline; }
+      .day-short { display: none; }
       @media (max-width: 720px) {
         .week-grid { grid-template-columns: 1fr; gap: 8px; }
-        .day-col { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: start; }
+        .day-col { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: start; }
         .day-col .day-head { flex-direction: column; align-items: flex-start; gap: 0; margin: 0; }
-        .day-col .slots { display: flex; flex-direction: column; gap: 8px; grid-column: 2; }
+        .day-col .slots { display: flex; flex-direction: column; gap: 8px; grid-column: 2; min-width: 0; }
         .day-head { grid-column: 1; }
+        .day-head .display { font-size: 16px; }
+        .day-full { display: none; }
+        .day-short { display: inline; }
       }
     </style>
   `;
@@ -462,7 +467,7 @@ function renderDayColumn(day, date, today, isCurrentWeek, persoon) {
   return html`
     <div class="day-col ${isToday ? 'today' : ''}">
       <div class="day-head">
-        <div class="display">${DAGEN[day - 1]}</div>
+        <div class="display"><span class="day-full">${DAGEN[day - 1]}</span><span class="day-short">${DAGEN_KORT[day - 1]}</span></div>
         <div class="cmt">${date.getUTCDate()}/${date.getUTCMonth() + 1}</div>
       </div>
       <div class="slots">
