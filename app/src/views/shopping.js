@@ -151,6 +151,18 @@ async function loadAll() {
         await generateOrRefresh();
         return;
       }
+      // v1.5d: éénmalig reclassify zodat items met verouderde categorie
+      // ('Overig' van vóór de keyword-uitbreiding) nu in de juiste card komen.
+      const reclassified = vs.items.map(it => {
+        const newCat = classifyIngredient((it.name || '').toLowerCase().trim());
+        return newCat !== it.category ? { ...it, category: newCat } : it;
+      });
+      const changed = reclassified.some((it, i) => it !== vs.items[i]);
+      if (changed) {
+        vs.items = reclassified;
+        try { vs.list = await updateShoppingList({ id: vs.list.id, items: reclassified }); }
+        catch (e) { /* niet kritisch, stille fail */ }
+      }
     }
   } catch (err) {
     vs.error = err.message;
@@ -169,8 +181,41 @@ async function generateOrRefresh() {
       vs.loading = false; rerender(); return;
     }
     const aggregated = aggregateShopping(vs.meals, vs.modus);
-    const oldByKey = new Map((vs.list?.items || []).map(it => [itemKey(it), it]));
-    const items = aggregated.map(it => ({ ...it, checked: oldByKey.get(itemKey(it))?.checked ?? false }));
+    const oldItems = vs.list?.items || [];
+    const oldByKey = new Map(oldItems.map(it => [itemKey(it), it]));
+
+    // v1.5d: behoud items van akkoord-recepten (source.recipeKey) en mergeer
+    // met nieuwe aggregator-output op itemKey. Anders zou Vernieuw alle
+    // akkoord-items wissen.
+    const merged = new Map();
+    for (const it of aggregated) {
+      const key = itemKey(it);
+      merged.set(key, { ...it, checked: oldByKey.get(key)?.checked ?? false });
+    }
+    for (const oldIt of oldItems) {
+      const recipeSources = (oldIt.sources || []).filter(s => s.recipeKey);
+      if (recipeSources.length === 0) continue;
+      const key = itemKey(oldIt);
+      if (merged.has(key)) {
+        const cur = merged.get(key);
+        cur.sources = [...cur.sources, ...recipeSources];
+        cur.qty = (cur.qty || 0) + recipeSources.reduce((s, x) => s + (Number(x.qty) || 0), 0);
+        for (const s of recipeSources) {
+          for (const w of (oldIt.who || [])) if (!cur.who.includes(w)) cur.who.push(w);
+        }
+      } else {
+        // Item bestaat alleen via akkoord-flow → houd 'm zoals 'ie was, maar
+        // herclassifeer voor het geval keywords zijn uitgebreid.
+        merged.set(key, {
+          ...oldIt,
+          sources: recipeSources,
+          checked: oldIt.checked ?? false,
+          category: classifyIngredient(oldIt.name?.toLowerCase().trim()),
+        });
+      }
+    }
+    const items = [...merged.values()];
+
     if (vs.list) vs.list = await updateShoppingList({ id: vs.list.id, items });
     else vs.list = await createShoppingList({ ownerId: appState.auth.profile.id, weekIds, items });
     vs.items = vs.list.items;

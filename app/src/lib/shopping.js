@@ -232,6 +232,10 @@ export function mergeRecipeIntoItems(items, { recipeKey, day, mealName, who, sca
         checked: false,
       };
       result.push(item);
+    } else {
+      // v1.5d: ververs categorie voor bestaande items zodat classifier-updates
+      // niet pas bij volgend Vernieuw doorkomen.
+      item.category = classifyIngredient(nameKey);
     }
     item.sources = [...(item.sources || []), {
       slug: primary,
