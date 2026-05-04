@@ -78,7 +78,6 @@ export function Shell(state, actions) {
       </nav>
 
       <div class="topbar-right">
-        <span class="cmt week-info">// week ${weekLabel} · ${VERSION}</span>
         <div class="persoon-toggle" role="tablist" aria-label="Welk menu">
           ${PERSONEN.map(p => html`
             <button

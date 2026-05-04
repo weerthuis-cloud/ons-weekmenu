@@ -51,6 +51,9 @@ const PATHS = {
 };
 
 export function SlotIcon({ slot, size = 18, color = 'currentColor' } = {}) {
+  // v1.9c: ontbijt/lunch/tussendoor-iconen weggehaald (geen functie meer
+  // naast de tekstlabels). Diner-icoon blijft staan tenzij anders gevraagd.
+  if (slot !== 'diner') return null;
   const path = PATHS[slot];
   if (!path) return null;
   return html`
