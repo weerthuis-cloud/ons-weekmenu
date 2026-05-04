@@ -665,17 +665,20 @@ export function ShoppingView(state) {
 
       ${vs.error ? html`<div class="err">${vs.error}</div>` : nothing}
 
-      <div class="filter-row no-print day-filter-row" style="justify-content: flex-start;">
-        <div class="cmt" style="margin-right: 8px;">// boodschappen voor</div>
-        ${[1,2,3,4,5,6,7].map(d => html`
-          <button class="chip day-chip ${vs.selectedDays.has(d) ? 'is-on' : ''}" @click=${() => toggleDay(d)}>
-            ${DAGEN_KORT[d - 1]}
-          </button>
-        `)}
-        <span style="flex:1"></span>
-        <button class="chip small ghost" @click=${setDaysAll}     title="hele week">alles</button>
-        <button class="chip small ghost" @click=${setDaysToday}   title="alleen vandaag">vandaag</button>
-        <button class="chip small ghost" @click=${setDaysTodayTomorrow} title="vandaag + morgen">+morgen</button>
+      <div class="day-filter-block no-print">
+        <div class="cmt">// boodschappen voor</div>
+        <div class="day-chip-grid">
+          ${[1,2,3,4,5,6,7].map(d => html`
+            <button class="chip day-chip ${vs.selectedDays.has(d) ? 'is-on' : ''}" @click=${() => toggleDay(d)}>
+              ${DAGEN_KORT[d - 1]}
+            </button>
+          `)}
+        </div>
+        <div class="day-quick">
+          <button class="chip small ghost" @click=${setDaysAll}     title="hele week">alles</button>
+          <button class="chip small ghost" @click=${setDaysToday}   title="alleen vandaag">vandaag</button>
+          <button class="chip small ghost" @click=${setDaysTodayTomorrow} title="vandaag + morgen">+morgen</button>
+        </div>
       </div>
 
       <!-- v2.0c: route-keuze (AH/Jumbo/Lidl) verwijderd op verzoek. Code in
@@ -775,13 +778,19 @@ export function ShoppingView(state) {
       .ignore-btn:hover { opacity: 1; color: oklch(50% 0.18 28); }
       .dup-mark { font-size: 11px; color: var(--ink-3); margin-left: 4px; cursor: help; }
 
-      /* v2.0: dag-filter chips */
-      .day-filter-row { gap: 4px; }
-      .day-chip { min-width: 38px; text-align: center; }
+      /* v2.0 + v2.2: dag-filter chips in een 7-koloms grid (altijd één rij) */
+      .day-filter-block { display: flex; flex-direction: column; gap: 8px; }
+      .day-chip-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+      }
+      .day-chip { text-align: center; padding: 6px 0; min-width: 0; width: 100%; }
+      .day-quick { display: flex; gap: 6px; flex-wrap: wrap; }
       .chip.small { font-size: 11px; padding: 4px 10px; }
       @media (max-width: 720px) {
-        .day-chip { min-width: 32px; padding: 4px 6px; font-size: 11px; }
-        .chip.small { font-size: 10px; padding: 3px 6px; }
+        .day-chip { font-size: 11px; padding: 5px 0; }
+        .chip.small { font-size: 10px; padding: 3px 8px; }
       }
       .done-head { margin-bottom: 8px; }
       .store-head {
