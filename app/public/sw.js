@@ -1,9 +1,14 @@
-// Service worker v1.8 — basisbescherming tegen offline.
+// Service worker v2.2 — basisbescherming tegen offline + cache-bust per release.
 // Strategy: stale-while-revalidate voor app-assets, network-only voor Supabase.
 // De Boodschappenlijst zelf wordt door de view in localStorage gecached
 // (zie views/shopping.js) zodat hij offline leesbaar blijft.
+//
+// Cache-key komt uit ?v= query string. Bij elke release registreert main.js
+// /sw.js?v=<VERSION> — dat invalideert browser-cache van sw.js zelf én geeft
+// een nieuwe cache-namespace, zodat oude assets in activate gewist worden.
 
-const CACHE = 'owm-v1.8';
+const VERSION = new URLSearchParams(self.location.search).get('v') || 'dev';
+const CACHE = 'owm-' + VERSION;
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

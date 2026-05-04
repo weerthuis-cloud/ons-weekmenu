@@ -8,10 +8,14 @@ import { initRouter, getRoute } from './router.js';
 import { initAuth, onAuthChange, getAuthState, signOut } from './lib/auth.js';
 import { todayInfo } from './lib/datums.js';
 
-// v1.8: registreer service worker voor offline-cache.
+// v1.8 + v2.2: registreer service worker voor offline-cache.
+// Version-query forceert browser om sw.js opnieuw te fetchen bij release-bump,
+// en geeft de nieuwe SW een eigen cache-namespace zodat oude assets in de
+// activate-hook gewist worden.
+import { VERSION as APP_VERSION } from './version.js';
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const swUrl = (import.meta.env.BASE_URL || '/') + 'sw.js';
+    const swUrl = (import.meta.env.BASE_URL || '/') + 'sw.js?v=' + APP_VERSION;
     navigator.serviceWorker.register(swUrl).catch(err => console.warn('SW register failed:', err));
   });
 }

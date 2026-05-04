@@ -1,0 +1,28 @@
+/* v2.2: lokaal gehoste fonts (Google Fonts, latin subset).
+   Bron: fonts.googleapis.com css2-API met moderne UA.
+   Google serveert variable fonts: één bestand per family bevat alle weights.
+   Daarom wijzen alle @font-face entries per family naar hetzelfde bestand. */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/bricolage-grotesque.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/inter.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+}

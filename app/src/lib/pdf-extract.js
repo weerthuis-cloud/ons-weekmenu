@@ -1,10 +1,21 @@
 // pdf.js wrapper voor client-side PDF-extractie.
 // Geeft per pagina een lijst tekst-items met x/y/breedte. PDF blijft op het apparaat.
+//
+// v2.2: lazy-load van pdfjs-dist + worker. ~1MB wordt pas geladen op het
+// moment dat extractPdf() voor het eerst wordt aangeroepen (Import-tab).
+// Daarvoor zit pdfjs niet in de hoofdbundel.
 
-import * as pdfjsLib from 'pdfjs-dist';
-// Vite-vriendelijke worker-import
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+let _pdfjsLoaded = null;
+async function loadPdfjs() {
+  if (_pdfjsLoaded) return _pdfjsLoaded;
+  _pdfjsLoaded = (async () => {
+    const pdfjsLib = await import('pdfjs-dist');
+    const workerMod = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerMod.default;
+    return pdfjsLib;
+  })();
+  return _pdfjsLoaded;
+}
 
 /**
  * Extract text-items per page.
@@ -12,6 +23,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
  * @returns {Promise<{ pages: Array<{ width, height, items: Array<{text, x, y, w, h}> }>}>}
  */
 export async function extractPdf(source) {
+  const pdfjsLib = await loadPdfjs();
   const data = source instanceof File ? await source.arrayBuffer() : source;
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(data) }).promise;
   const pages = [];

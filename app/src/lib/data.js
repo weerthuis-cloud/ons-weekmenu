@@ -521,10 +521,36 @@ export async function deleteWeeksOlderThan(cutoffYear, cutoffWeek) {
 // wordt vervangen door de huidige auth.uid() zodat de import in een ander
 // account ook werkt.
 export async function restoreFromBackup(backup) {
+  // v2.2: schema-validatie vóór delete-fase. Voorkomt dat een corrupt of
+  // verkeerd JSON-bestand de DB onbruikbaar maakt.
   if (!backup || typeof backup !== 'object') throw new Error('Backup is leeg of ongeldig.');
   const required = ['profiles', 'meals', 'weeks', 'week_meals', 'shopping_lists'];
   for (const t of required) {
     if (!Array.isArray(backup[t])) throw new Error(`Backup mist tabel '${t}'.`);
+  }
+  // Per-tabel: minimale veld-checks zodat insert later niet faalt halverwege.
+  const checks = [
+    ['profiles',       (r) => r && typeof r.id === 'string' && typeof r.naam === 'string'],
+    ['meals',          (r) => r && typeof r.id === 'string' && typeof r.name === 'string' && typeof r.type === 'string'],
+    ['weeks',          (r) => r && typeof r.id === 'string' && Number.isInteger(r.year) && Number.isInteger(r.week_nr)],
+    ['week_meals',     (r) => r && typeof r.id === 'string' && typeof r.week_id === 'string' && typeof r.meal_id === 'string'],
+    ['shopping_lists', (r) => r && typeof r.id === 'string' && Array.isArray(r.items)],
+  ];
+  for (const [tabel, check] of checks) {
+    const rows = backup[tabel];
+    for (let i = 0; i < rows.length; i++) {
+      if (!check(rows[i])) {
+        throw new Error(`Backup ongeldig: ${tabel}[${i}] mist verplichte velden of heeft verkeerd type.`);
+      }
+    }
+  }
+  if (Array.isArray(backup.shopping_notes)) {
+    for (let i = 0; i < backup.shopping_notes.length; i++) {
+      const r = backup.shopping_notes[i];
+      if (!r || typeof r.id !== 'string' || typeof r.name !== 'string') {
+        throw new Error(`Backup ongeldig: shopping_notes[${i}] mist verplichte velden.`);
+      }
+    }
   }
 
   const { data: { user } } = await supabase.auth.getUser();
