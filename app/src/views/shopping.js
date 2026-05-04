@@ -13,7 +13,7 @@ import { aggregateShopping, groupByCategory, groupByStore, itemKey,
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { ROUTES, ROUTE_LABELS } from '../lib/winkelroutes.js';
-import { DAY_HUE, dayColor, isRecipeIncomplete, houseIcon } from '../lib/recipe-helpers.js';
+import { DAY_HUE, dayColor, isRecipeIncomplete } from '../lib/recipe-helpers.js';
 import { Checkbox } from '../components/checkbox.js';
 import { rerender, state as appState, actions as appActions } from '../main.js';
 
@@ -257,14 +257,7 @@ async function toggleChecked(idx) {
   catch (err) { vs.error = err.message; rerender(); }
 }
 
-// v1.7 #2: 'in huis'-toggle. Item gaat naar aparte sectie zonder gekocht te worden.
-async function toggleInHouse(idx) {
-  const next = vs.items.map((x, i) => i === idx ? { ...x, inHouse: !x.inHouse } : x);
-  vs.items = next;
-  rerender();
-  try { vs.list = await updateShoppingList({ id: vs.list.id, items: next }); }
-  catch (err) { vs.error = err.message; rerender(); }
-}
+// (v1.8c: 'in huis'-toggle verwijderd — vinkje doet hetzelfde werk)
 
 function startEditQty(key) {
   vs.editingKey = key;
@@ -498,10 +491,9 @@ export function ShoppingView(state) {
   const filteredItems = vs.storeFilter === 'all'
     ? all
     : all.filter(it => it.store === vs.storeFilter);
-  // v1.7 #2: drie buckets — open / in huis / afgevinkt.
-  const openItems    = filteredItems.filter(i => !i.checked && !i.inHouse);
-  const inHouseItems = filteredItems.filter(i => !i.checked &&  i.inHouse);
-  const doneItems    = filteredItems.filter(i =>  i.checked);
+  // Open + afgevinkt — vinkje markeert beide 'al in huis' en 'gekocht'.
+  const openItems = filteredItems.filter(i => !i.checked);
+  const doneItems = filteredItems.filter(i =>  i.checked);
   const groups = groupByCategory(openItems);
   // v1.6: hersorteer categorie-cards op winkelroute (alleen als niet-standaard)
   const route = ROUTES[vs.routeStore];
@@ -595,7 +587,6 @@ export function ShoppingView(state) {
         ${groups.map(group => renderCategoryCard(group, all))}
       </div>
 
-      ${inHouseItems.length > 0 ? renderInHouseSection(inHouseItems, all) : nothing}
       ${doneItems.length > 0 ? renderDoneSection(doneItems, all) : nothing}
     </section>
 
@@ -667,28 +658,7 @@ export function ShoppingView(state) {
         padding: 14px 18px;
         margin-top: 4px;
       }
-      .inhouse-card {
-        background: var(--bg);
-        border: 1px solid var(--line);
-        border-radius: var(--r-lg);
-        padding: 14px 18px;
-        margin-top: 4px;
-      }
-      .item-row.is-inhouse { opacity: 0.7; }
-      .item-row.is-inhouse .name { font-style: italic; }
-      .house-btn {
-        background: transparent;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        width: 28px; height: 28px;
-        display: inline-flex; align-items: center; justify-content: center;
-        cursor: pointer;
-        color: var(--ink-3);
-        flex-shrink: 0;
-        padding: 0;
-      }
-      .house-btn:hover { color: var(--ink); border-color: var(--ink); }
-      .house-btn.is-on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+      /* (v1.8c: in-huis-toggle weggehaald — geen .house-btn / .inhouse-card meer) */
       .done-head { margin-bottom: 8px; }
       .store-head {
         display: flex; align-items: center; justify-content: space-between;
@@ -1098,34 +1068,6 @@ function renderNotesPanel() {
   `;
 }
 
-function renderInHouseSection(items, allItems) {
-  return html`
-    <div class="inhouse-card">
-      <div class="done-head">
-        <div class="cmt">// in huis — ${items.length} ${items.length === 1 ? 'item' : 'items'}</div>
-      </div>
-      <ul class="item-list">
-        ${items.map(item => {
-          const idx = allItems.indexOf(item);
-          return html`
-            <li class="item-row is-inhouse">
-              <button class="house-btn is-on" title="in huis — klik om terug te zetten" @click=${() => toggleInHouse(idx)}>
-                ${houseIcon()}
-              </button>
-              <div class="name-col">
-                <span class="name">${item.name}</span>
-              </div>
-              <span class="qty">${item.qty != null ? formatQty(item.qty, item.unit) : ''}</span>
-            </li>
-          `;
-        })}
-      </ul>
-    </div>
-  `;
-}
-
-// (v1.7 #4: houseIcon verhuisd naar lib/recipe-helpers.js)
-
 function renderDoneSection(doneItems, allItems) {
   return html`
     <div class="done-card">
@@ -1184,9 +1126,6 @@ function renderCategoryCard(group, allItems) {
               <span @click=${() => toggleChecked(idx)}>
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
               </span>
-              <button class="house-btn" title="markeer als al in huis" @click=${(e) => { e.stopPropagation(); toggleInHouse(idx); }}>
-                ${houseIcon()}
-              </button>
               <div class="name-col" @click=${() => toggleChecked(idx)}>
                 <span class="name">${item.name}</span>
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
