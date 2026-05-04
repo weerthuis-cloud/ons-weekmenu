@@ -516,6 +516,75 @@ export async function deleteWeeksOlderThan(cutoffYear, cutoffWeek) {
   return { deletedWeeks: weeks.length, deletedPdfs };
 }
 
+// v1.8b: Restore uit backup-JSON. Wist eerst alle huidige data (cascade),
+// daarna inserts in volgorde van FK-afhankelijkheden. user_id van profiles
+// wordt vervangen door de huidige auth.uid() zodat de import in een ander
+// account ook werkt.
+export async function restoreFromBackup(backup) {
+  if (!backup || typeof backup !== 'object') throw new Error('Backup is leeg of ongeldig.');
+  const required = ['profiles', 'meals', 'weeks', 'week_meals', 'shopping_lists'];
+  for (const t of required) {
+    if (!Array.isArray(backup[t])) throw new Error(`Backup mist tabel '${t}'.`);
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Niet ingelogd — login eerst.');
+  const currentUid = user.id;
+
+  // 1. Wis alle huidige data (cascade via FK on delete cascade).
+  // Volgorde belangrijk om FK-violations te voorkomen tijdens delete-fase.
+  await supabase.from('shopping_notes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('shopping_lists').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('week_meals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('weeks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('meals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('profiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+  // 2. Insert in juiste volgorde, met user_id-rewrite voor profiles.
+  const profiles = backup.profiles.map(p => ({ ...p, user_id: currentUid }));
+  if (profiles.length) {
+    const { error } = await supabase.from('profiles').insert(profiles);
+    if (error) throw new Error('profiles: ' + error.message);
+  }
+  if (backup.meals.length) {
+    const { error } = await supabase.from('meals').insert(backup.meals);
+    if (error) throw new Error('meals: ' + error.message);
+  }
+  if (backup.weeks.length) {
+    const { error } = await supabase.from('weeks').insert(backup.weeks);
+    if (error) throw new Error('weeks: ' + error.message);
+  }
+  if (backup.week_meals.length) {
+    const { error } = await supabase.from('week_meals').insert(backup.week_meals);
+    if (error) throw new Error('week_meals: ' + error.message);
+  }
+  if (backup.shopping_lists.length) {
+    const { error } = await supabase.from('shopping_lists').insert(backup.shopping_lists);
+    if (error) throw new Error('shopping_lists: ' + error.message);
+  }
+  if (Array.isArray(backup.shopping_notes) && backup.shopping_notes.length) {
+    const { error } = await supabase.from('shopping_notes').insert(backup.shopping_notes);
+    if (error) throw new Error('shopping_notes: ' + error.message);
+  }
+
+  clearCache();
+  notify('profiles');
+  notify('meals');
+  notify('weeks');
+  notify('week_meals');
+  notify('shopping_lists');
+  notify('shopping_notes');
+
+  return {
+    profiles: profiles.length,
+    meals: backup.meals.length,
+    weeks: backup.weeks.length,
+    week_meals: backup.week_meals.length,
+    shopping_lists: backup.shopping_lists.length,
+    shopping_notes: backup.shopping_notes?.length || 0,
+  };
+}
+
 // 'Wis al mijn data' — recht op vergetelheid. Verwijdert alles van de huidige
 // auth-user. Profiles van het huishouden, hun weken, week_meals, shopping_lists,
 // shopping_notes, en alle PDFs uit storage. Soft delete-meals (zonder owner) blijven.

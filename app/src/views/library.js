@@ -1,7 +1,7 @@
 // Archief v0.6: prototype-stijl mosaic preview-cards.
 import { html, nothing } from 'lit-html';
 import { listProfiles, listWeeks, countSlotsByWeek, addWeek, getWeek, duplicateWeekMeals, onDataChange,
-         exportAllData, deleteWeeksOlderThan, wipeAllUserData } from '../lib/data.js';
+         exportAllData, restoreFromBackup, deleteWeeksOlderThan, wipeAllUserData } from '../lib/data.js';
 import { formatWeekRange, todayInfo } from '../lib/datums.js';
 import { rerender } from '../main.js';
 import { setRoute } from '../router.js';
@@ -310,6 +310,25 @@ async function doDownloadBackup() {
   }
 }
 
+async function doRestoreBackup(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';   // reset zodat zelfde file opnieuw kan
+  if (!file) return;
+  if (!confirm(`Restore "${file.name}" — dit OVERSCHRIJFT al je huidige data (profielen, maaltijden, weken, lijsten). Doorgaan?`)) return;
+  if (!confirm('Echt zeker? Maak eerst een backup van de huidige data als je twijfelt.')) return;
+  vs.error = null; rerender();
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    const res = await restoreFromBackup(json);
+    alert(`Restore klaar:\n${res.profiles} profielen\n${res.meals} maaltijden\n${res.weeks} weken\n${res.week_meals} weekmaaltijden\n${res.shopping_lists} lijsten\n${res.shopping_notes} notities`);
+    location.reload();
+  } catch (err) {
+    vs.error = 'Restore mislukt: ' + err.message;
+    rerender();
+  }
+}
+
 async function doDeleteOldWeeks() {
   // Cutoff: 8 weken vóór huidige week
   const t = todayInfo();
@@ -349,6 +368,11 @@ function renderMaintenancePanel() {
       <div class="maint-row">
         <button class="btn" @click=${doDownloadBackup}>↓ download backup (.json)</button>
         <span class="cmt">Alle tabellen als JSON. Bewaar lokaal als veiligheidskopie.</span>
+      </div>
+      <div class="maint-row">
+        <label class="btn ghost" for="owm-restore-input" style="cursor:pointer;">↑ herstel uit backup</label>
+        <input id="owm-restore-input" type="file" accept="application/json" style="display:none;" @change=${doRestoreBackup} />
+        <span class="cmt">Overschrijft alle huidige data met de inhoud van een eerdere backup.</span>
       </div>
       <div class="maint-row">
         <button class="btn ghost" @click=${doDeleteOldWeeks}>wis weken ouder dan 8 weken</button>

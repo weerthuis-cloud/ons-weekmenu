@@ -430,3 +430,80 @@ Daarna: elke push deployt automatisch.
 - Visuele highlight van gelinkte items werkt alleen bij geopend recept. Geen permanente "uit dit recept"-indicator buiten de stripes (die zijn al genoeg).
 
 ---
+
+## 2026-05-02 — v1.4: horizontale swipe-navigatie (mobile)
+
+**Nieuw bestand `lib/swipe.js`.** Pure helper `installSwipeNavigation(element, { routes, getCurrent, setRoute })` met touchstart/end. Threshold 60px horizontaal, max 40px verticaal (anders is het scroll-poging). Skipt swipe als touch begint in input/button/.dp-chips/.notes-panel/.recipe-actions/[data-no-swipe]. Alleen actief op viewport ≤ 720px.
+
+**In shell.js:** lazy-bind via `queueMicrotask(ensureSwipe)` na elke render, met installed-flag zodat we maar één keer registreren.
+
+**Routes:** `['week', 'dag', 'lijst']`. Swipe-links = volgende, swipe-rechts = vorige.
+
+---
+
+## 2026-05-02 — v1.5: WeekView mobile fix + boodschappen layout-cleanup
+
+**WeekView mobile.** Dagnaam wisselt naar DAGEN_KORT (Ma/Di) op viewport ≤ 720px via `.day-full`/`.day-short` spans + media-query CSS. Day-kolom van 70px naar 44px, slots-kolom krijgt `min-width: 0` zodat lange meal-namen netjes wrappen. Geen overflow meer onder smalle iPhones.
+
+**Boodschappen-rij.** Dag-streepjes uit v1.3 verwijderd (oogden rommelig bij items met meerdere herkomsten — olijfolie kreeg 7 streepjes). P/M-cirkels verplaatst van na qty naar tussen naam en qty. Qty-knop kreeg vaste min-width 80px voor uitlijning aan rechterzijde.
+
+**Highlight bij open recept.** Geen kleurborder meer. Vervangen door `bg-2`-achtergrond + kleine `▸` voor de naam in dag-kleur (subtiel maar zichtbaar).
+
+**Versie-pill.** `app/src/version.js` als één plek voor versie-string. Pill rechts in topbar, ook zichtbaar op mobile (was eerst verborgen).
+
+**v1.5b: classifier uitgebreid.** lib/categorie.js keywords toegevoegd voor: kefir, roerei, kookzuivel, kokossnippers, pecannoten, basmatirijst, kipfiletreepjes, bouillontablet, krulpeterselie, beleg + recept-specifieke ingrediënten van alle 7 dineren. Plus substring-fallback (alleen voor keywords ≥ 4 chars) zodat samengestelde namen ('basmatirijst' bevat 'rijst') matchen.
+
+**v1.5c: ingrediënten weg uit meal-detail voor recipe-meals.** Voor diner met `serves > 0` toont meal-detail-modal alleen het recept (bereidingswijze), geen aparte ingrediëntenlijst. Solo-meals (ontbijt etc) houden hun ingrediëntenlijst.
+
+**v1.5d: twee bugs.**
+1. `mergeRecipeIntoItems` werkt category alleen voor nieuwe items. Bestaande items blijven 'overig' bij Bijwerken. Fix: bij bestaande items ook `item.category = classifyIngredient(nameKey)` zetten.
+2. `generateOrRefresh` overschreef hele lijst met aggregator-output, wat alle akkoord-items wiste. Fix: filter items met `source.recipeKey` uit de oude lijst, mergeer ze met nieuwe aggregator-output op itemKey (sources optellen).
+3. Eenmalige reclassify in `loadAll` zodat oude items in lijst direct in juiste categorie komen zonder per recept Bijwerken.
+
+---
+
+## 2026-05-02 — v1.6: winkelroutes per supermarkt
+
+**Nieuw bestand `lib/winkelroutes.js`.** Per supermarkt (`ah`, `jumbo`, `lidl`) een array van categorie-IDs in loop-volgorde. Standaard = `null` (gebruik categoryOrder uit categorie.js).
+
+- AH: groente → brood → zuivel → vlees → kruiden → houdbaar → drank → overig
+- Jumbo: groente → vlees → zuivel → brood → kruiden → houdbaar → drank → overig
+- Lidl: groente → brood → zuivel → vlees → houdbaar → kruiden → drank → overig
+
+Generieke layouts (niet filiaal-specifiek). Iemand met meer info kan later finetunen.
+
+**UI.** Chips boven categorie-cards. Keuze persistent in `localStorage.owm.routeStore`. Bij wissel sorteert de view de category-cards op de gekozen route.
+
+**Vervangen.** Oude "store-filter-row" (met `// gegroepeerd per winkel` + winkel-chips) was nutteloos zonder per-ingredient store-veld. Vervangen door route-chips die wel praktisch zijn in de winkel.
+
+---
+
+## 2026-05-02 — v1.7: vijf concrete features in één release
+
+**#1 Recept-incompleet waarschuwing.** Helper `isRecipeIncomplete(meal)` (verhuisd naar lib/recipe-helpers.js): true als `serves` ontbreekt of `ingredients` leeg is. Toont `⚠`-icoon naast titel in recepten-paneel + uitleg-tekst met link naar Maker in expand-paneel. Werkt voor alle scenarios (PDF-import, manueel, ...), niet alleen import-detection. Pragmatischer dan ImportView aanpassen.
+
+**#2 'In huis'-toggle.** Nieuwe `inHouse: bool` op items in shopping_list. Per item-rij een huisje-knop (SVG) naast checkbox. Klik = `toggleInHouse(idx)` → schrijf naar DB + naar aparte sectie "In huis" tussen open en afgevinkt. Items blijven zichtbaar maar half doorgestreept met cursief. Werkt voor solo-meals én recipe-meals.
+
+**#3 vs.recipes reset bij week/modus wissel.** In `setModus` en `changeWeek` wordt `vs.recipes = {}`. Voorkomt dat uitgeklapte recepten van vorige selectie zichtbaar blijven.
+
+**#4 Lichte refactor: helpers naar lib/recipe-helpers.js.** Verhuisd: `DAY_HUE`, `dayColor`, `isRecipeIncomplete`, `houseIcon`. Render-functies en state-mutators blijven nog in views/shopping.js. Volledige split (renderDinerPortions etc.) is risico-vol genoeg voor een eigen v1.9-pass — bewust uitgesteld.
+
+**#5 Skip-knop (chip "—").** In recepten-paneel een extra chip links van 1/2/3/4. Klik 0 → `setGroupPorties(group, 0)` → `setWeekMealsPorties` schrijft 0 naar DB + `unapproveRecipe` verwijdert items uit lijst. Visueel: `is-skip` class op rij + naam doorgestreept + label "uit eten". Klik 1-4 = re-akkoord met nieuwe porties.
+
+---
+
+## 2026-05-02 — v1.8: achterkant verstevigen (tests, backup, AVG, PWA)
+
+**#A Unit tests.** Bestand `app/test/*.test.js` met node:test runner (geen npm install, geen vitest). 37 tests over: aggregator (skip recipes, sum porties, modus), scaleRecipeIngredients, mergeRecipeIntoItems (lege lijst, re-merge, gedeeld ingredient, category-update), removeRecipeFromItems, approvedRecipeKeys/IngredientNames, classifier (incl. v1.5b-toevoegingen), recipe-helpers (isRecipeIncomplete, dayColor, DAY_HUE), itemKey-stabiliteit. Run met `npm test` (script in package.json).
+
+**#B Backup-export.** `exportAllData()` in data.js haalt alle 6 tabellen op (profiles, meals, weeks, week_meals, shopping_lists, shopping_notes), returnt `{ exportedAt, appVersion, ...tabellen }`. Knop in Bibliotheek (onderhoud-paneel onderaan): `↓ download backup (.json)` triggert Blob-download van `owm-backup-YYYY-MM-DD.json`.
+
+**#C AVG-cleanup.** Twee functies in data.js. `deleteWeeksOlderThan(year, week)` zoekt te-verwijderen weken via `or(year.lt.X, and(year.eq.X,week_nr.lt.Y))`, wist hun PDFs uit storage-bucket, en delete weeks (cascade FK wist week_meals + shopping_lists). `wipeAllUserData()` verwijdert alle PDFs + alle profiles (cascade alles). UI in Bibliotheek met dubbele bevestiging op "wis al mijn data".
+
+**#D PWA offline.** Nieuw `app/public/sw.js` (service worker) met stale-while-revalidate voor app-assets. Supabase API blijft network-only. Geregistreerd in main.js via `navigator.serviceWorker.register((BASE_URL || '/') + 'sw.js')`. Plus: `loadAll()` in shopping.js cached succesvolle lijst-load in `localStorage.owm.list.{modus}.{year}.{week}`. Bij netwerkfail leest hij uit cache en toont label "Offline — toon opgeslagen lijst van [tijdstip]". Afvinken offline werkt nog niet (synced niet door tot online) — geplande v1.9 als nodig.
+
+**Race-condition fix die niet onder eigen versie viel.** `setWeekMealPorties` triggerde N notify's bij N owner-records, waardoor parallelle `loadAll` calls stale data inlazen en de Math.max-dedup foute waarden teruggaf (chip "1" sprong terug naar "2"). Opgelost met nieuwe `setWeekMealsPorties({ ids, weekIds, porties })` die in één DB-query alle records bijwerkt en één notify triggert.
+
+**Schema-status.** `supabase/schema.sql` bijgewerkt voor `meals.recipe` (was missing sinds v0.9) en `meals.serves` (v1.2). Niet expliciet bijgewerkt voor v1.3+ items-format want JSONB-blob veranderingen vergen geen DDL.
+
+---
