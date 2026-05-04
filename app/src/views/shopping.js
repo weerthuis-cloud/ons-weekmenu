@@ -807,7 +807,7 @@ export function ShoppingView(state) {
       .row-mark { font-weight: 700; font-size: 14px; width: 10px; text-align: center; flex-shrink: 0; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
       .item-row .name-col { flex: 1 1 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; overflow: hidden; }
-      .item-row .name { font-size: 14px; font-weight: 500; word-break: break-word; overflow-wrap: anywhere; }
+      .item-row .name { font-size: 14px; font-weight: 500; word-break: normal; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
       .item-row .who { flex-shrink: 0; }
       .recipe-dots { display: inline-flex; gap: 3px; margin-right: 6px; vertical-align: middle; }
       .recipe-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
