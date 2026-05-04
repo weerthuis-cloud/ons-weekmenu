@@ -601,14 +601,7 @@ export function ShoppingView(state) {
     const k = normalizeName(it.name);
     nameCounts.set(k, (nameCounts.get(k) || 0) + 1);
   }
-  // v1.6: hersorteer categorie-cards op winkelroute (alleen als niet-standaard)
-  const route = ROUTES[vs.routeStore];
-  if (route) {
-    groups.sort((a, b) => {
-      const ai = route.indexOf(a.categoryId); const bi = route.indexOf(b.categoryId);
-      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    });
-  }
+  // (v2.0c: route-sortering verwijderd op verzoek)
 
   const totalCount = all.length;
   const checkedCount = all.filter(i => i.checked).length;
@@ -685,14 +678,9 @@ export function ShoppingView(state) {
         <button class="chip small ghost" @click=${setDaysTodayTomorrow} title="vandaag + morgen">+morgen</button>
       </div>
 
-      <div class="filter-row no-print route-row" style="justify-content: flex-start;">
-        <div class="cmt" style="margin-right: 8px;">// route</div>
-        ${Object.keys(ROUTES).map(rid => html`
-          <button class="chip ${vs.routeStore === rid ? 'is-on' : ''}" @click=${() => setRouteStore(rid)}>
-            ${ROUTE_LABELS[rid]}
-          </button>
-        `)}
-      </div>
+      <!-- v2.0c: route-keuze (AH/Jumbo/Lidl) verwijderd op verzoek. Code in
+           lib/winkelroutes.js blijft staan voor mogelijk hergebruik. -->
+
 
       ${all.length === 0 && !vs.loading ? html`
         <div class="empty">
