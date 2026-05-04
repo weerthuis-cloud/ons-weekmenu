@@ -363,9 +363,20 @@ function view() {
           padding: 14px 22px 18px;
           border-top: 1px solid var(--line);
           display: flex; gap: 8px; align-items: center;
+          flex-wrap: wrap;
         }
         .btn.ghost.danger { color: oklch(40% 0.14 28); border-color: oklch(85% 0.08 28); }
         .btn.ghost.danger:hover { background: var(--tomato-tint); }
+        @media (max-width: 720px) {
+          .md-foot {
+            padding: 12px 14px 14px;
+            gap: 6px;
+            justify-content: flex-end;
+          }
+          .md-foot .btn { font-size: 12px; padding: 0 10px; height: 32px; }
+          /* Spacer (flex:1) laten verdwijnen zodat alle knoppen bij elkaar wrappen */
+          .md-foot > span { display: none; }
+        }
       </style>
     </div>
   `;
