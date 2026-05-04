@@ -7,6 +7,8 @@ import { SLOT_BY_ID } from '../lib/slots.js';
 import { SlotIcon } from './slot-icon.js';
 import { formatQty } from '../lib/units.js';
 import { DAGEN_KORT } from '../lib/datums.js';
+import { setWeekMealsPorties } from '../lib/data.js';
+import { scaleRecipeIngredients } from '../lib/shopping.js';
 
 const HOST_ID = '__meal_detail_host';
 
@@ -22,7 +24,31 @@ const ui = {
   mode: 'detail',
   // alle bestaande week_meals voor zelfde slug+slot, voor "ruil met" UI
   siblings: [],
+  // v1.9b: gekozen porties voor recipe-meals (chips in modal)
+  porties: 2,
+  savingPorties: false,
 };
+
+async function setPortiesFromModal(n) {
+  if (!ui.wm) return;
+  ui.porties = n;
+  ui.savingPorties = true;
+  rerender();
+  try {
+    await setWeekMealsPorties({
+      ids: [ui.wm.id],
+      weekIds: ui.wm.week_id ? [ui.wm.week_id] : [],
+      porties: n,
+    });
+    // Update lokale wm zodat re-render correct is
+    ui.wm = { ...ui.wm, porties: n };
+  } catch (err) {
+    alert('Opslaan mislukt: ' + err.message);
+  } finally {
+    ui.savingPorties = false;
+    rerender();
+  }
+}
 
 function ensureHost() {
   let host = document.getElementById(HOST_ID);
@@ -90,7 +116,37 @@ export function openMealDetail({ slot, wm, onReplace, onClear, onMove, onSwap, s
   ui.onSwap = onSwap;
   ui.siblings = siblings;
   ui.mode = 'detail';
+  ui.porties = Number(wm?.porties ?? (slot === 'diner' ? 2 : 1));
+  ui.savingPorties = false;
   rerender();
+}
+
+// v1.9b: porties-chips + geschaalde ingrediëntenlijst voor diner-recepten
+function renderPortionsAndScaledIngredients(meal) {
+  const cur = ui.porties;
+  const scaled = scaleRecipeIngredients(meal, cur);
+  return html`
+    <div class="md-portions">
+      <div class="cmt">// ingrediënten voor</div>
+      <div class="md-portions-chips">
+        ${[1, 2, 3, 4].map(n => html`
+          <button
+            class="md-portion-chip ${cur === n ? 'is-on' : ''}"
+            ?disabled=${ui.savingPorties}
+            @click=${() => setPortiesFromModal(n)}
+          >${n} ${n === 1 ? 'eter' : 'eters'}</button>
+        `)}
+      </div>
+      <ul class="md-ing-list">
+        ${scaled.map(ing => html`
+          <li>
+            <span class="ing-name">${ing.name}</span>
+            <span class="ing-qty mono">${ing.qtyBase != null ? formatQty(ing.qtyBase, ing.unitBase) : ''}</span>
+          </li>
+        `)}
+      </ul>
+    </div>
+  `;
 }
 
 // Lichte markdown→HTML: **bold**, *italic*, lijsten, paragraaf-breaks
@@ -235,6 +291,8 @@ function view() {
         </header>
 
         <div class="md-body">
+          ${isDiner && isRecipeMeal && ingredients.length > 0 ? renderPortionsAndScaledIngredients(meal) : nothing}
+
           ${hasIngredients ? html`
             <div class="cmt">// ingrediënten</div>
             <ul class="md-ing-list">
@@ -331,6 +389,21 @@ function view() {
           flex: 1;
           display: flex; flex-direction: column; gap: 14px;
         }
+
+        .md-portions { display: flex; flex-direction: column; gap: 8px; }
+        .md-portions-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+        .md-portion-chip {
+          font-family: var(--mono); font-size: 12px;
+          padding: 6px 12px;
+          border: 1px solid var(--line);
+          background: var(--bg);
+          color: var(--ink-2);
+          border-radius: 999px;
+          cursor: pointer;
+        }
+        .md-portion-chip:hover:not(:disabled) { border-color: var(--ink); }
+        .md-portion-chip.is-on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 700; }
+        .md-portion-chip:disabled { opacity: 0.5; cursor: wait; }
 
         .md-ing-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
         .md-ing-list li {
