@@ -43,6 +43,8 @@ const vs = {
   routeStore: (typeof localStorage !== 'undefined' && localStorage.getItem('owm.routeStore')) || 'standaard',
   // v1.9: permanent genegeerde ingrediënt-namen (lowercase normalized), persistent in localStorage
   ignored: new Set(loadIgnored()),
+  // v2.0: geselecteerde dagen voor de boodschappen (1=ma..7=zo). Default alle 7.
+  selectedDays: new Set(loadSelectedDays()),
   // Notities
   notes: [],
   noteInput: '',
@@ -50,6 +52,68 @@ const vs = {
 };
 
 // (v1.7 #4: DAY_HUE/dayColor verhuisd naar lib/recipe-helpers.js)
+
+// v2.0: geselecteerde dagen — persistent in localStorage
+function loadSelectedDays() {
+  try {
+    const raw = localStorage.getItem('owm.selectedDays');
+    if (!raw) return [1,2,3,4,5,6,7];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) && arr.length > 0 ? arr : [1,2,3,4,5,6,7];
+  } catch (e) { return [1,2,3,4,5,6,7]; }
+}
+function saveSelectedDays() {
+  try { localStorage.setItem('owm.selectedDays', JSON.stringify([...vs.selectedDays].sort())); }
+  catch (e) { /* niet kritisch */ }
+}
+function toggleDay(d) {
+  if (vs.selectedDays.has(d)) {
+    if (vs.selectedDays.size > 1) vs.selectedDays.delete(d);   // niet álles uitzetten
+  } else vs.selectedDays.add(d);
+  saveSelectedDays();
+  rerender();
+}
+function setDaysAll() {
+  vs.selectedDays = new Set([1,2,3,4,5,6,7]);
+  saveSelectedDays(); rerender();
+}
+function setDaysToday() {
+  const t = todayInfo();
+  vs.selectedDays = new Set([t.day]);
+  saveSelectedDays(); rerender();
+}
+function setDaysTodayTomorrow() {
+  const t = todayInfo();
+  const tom = t.day === 7 ? 1 : t.day + 1;
+  vs.selectedDays = new Set([t.day, tom]);
+  saveSelectedDays(); rerender();
+}
+
+// Filter helpers voor source.day
+function itemHasDayInSelection(item) {
+  const sources = item.sources || [];
+  if (sources.length === 0) return true;   // legacy zonder sources → altijd tonen
+  return sources.some(s => !s.day || vs.selectedDays.has(s.day));
+}
+function itemQtyForSelection(item) {
+  const sources = item.sources || [];
+  if (sources.length === 0) return { qty: item.qty, partial: item.partial, count: item.count, countOnly: item.countOnly };
+  let qty = 0;
+  let missing = false;
+  let count = 0;
+  for (const s of sources) {
+    if (s.day && !vs.selectedDays.has(s.day)) continue;
+    count += 1;
+    if (s.qty == null) missing = true;
+    else qty += Number(s.qty);
+  }
+  return {
+    qty: qty > 0 ? qty : null,
+    partial: missing && qty > 0,
+    count,
+    countOnly: qty === 0 && missing,
+  };
+}
 
 // v1.9: negeer-lijst gebruikt gedeelde lib/ignored.js
 function isIgnored(item) {
@@ -512,7 +576,16 @@ export function ShoppingView(state) {
     : all.filter(it => it.store === vs.storeFilter);
   // Open + afgevinkt — vinkje markeert beide 'al in huis' en 'gekocht'.
   // v1.9: filter ook permanent genegeerde ingrediënten (water etc).
-  const visibleItems = filteredItems.filter(i => !isIgnored(i));
+  // v2.0: filter op geselecteerde dagen + herrekenen qty per filtered sources.
+  const visibleItems = filteredItems
+    .filter(i => !isIgnored(i))
+    .filter(itemHasDayInSelection)
+    .map(it => {
+      const r = itemQtyForSelection(it);
+      // alleen aanpassen als bedrag verandert (anders behoud original ref voor identity)
+      if (r.qty === it.qty && r.partial === it.partial && r.count === it.count && r.countOnly === it.countOnly) return it;
+      return { ...it, qty: r.qty, partial: r.partial, count: r.count, countOnly: r.countOnly };
+    });
   const openItems = visibleItems.filter(i => !i.checked);
   const doneItems = visibleItems.filter(i =>  i.checked);
   const groups = groupByCategory(openItems);
@@ -593,6 +666,19 @@ export function ShoppingView(state) {
       ${renderDinerPortions()}
 
       ${vs.error ? html`<div class="err">${vs.error}</div>` : nothing}
+
+      <div class="filter-row no-print day-filter-row" style="justify-content: flex-start;">
+        <div class="cmt" style="margin-right: 8px;">// boodschappen voor</div>
+        ${[1,2,3,4,5,6,7].map(d => html`
+          <button class="chip day-chip ${vs.selectedDays.has(d) ? 'is-on' : ''}" @click=${() => toggleDay(d)}>
+            ${DAGEN_KORT[d - 1]}
+          </button>
+        `)}
+        <span style="flex:1"></span>
+        <button class="chip small ghost" @click=${setDaysAll}     title="hele week">alles</button>
+        <button class="chip small ghost" @click=${setDaysToday}   title="alleen vandaag">vandaag</button>
+        <button class="chip small ghost" @click=${setDaysTodayTomorrow} title="vandaag + morgen">+morgen</button>
+      </div>
 
       <div class="filter-row no-print route-row" style="justify-content: flex-start;">
         <div class="cmt" style="margin-right: 8px;">// route</div>
@@ -695,6 +781,15 @@ export function ShoppingView(state) {
       }
       .ignore-btn:hover { opacity: 1; color: oklch(50% 0.18 28); }
       .dup-mark { font-size: 11px; color: var(--ink-3); margin-left: 4px; cursor: help; }
+
+      /* v2.0: dag-filter chips */
+      .day-filter-row { gap: 4px; }
+      .day-chip { min-width: 38px; text-align: center; }
+      .chip.small { font-size: 11px; padding: 4px 10px; }
+      @media (max-width: 720px) {
+        .day-chip { min-width: 32px; padding: 4px 6px; font-size: 11px; }
+        .chip.small { font-size: 10px; padding: 3px 6px; }
+      }
       .done-head { margin-bottom: 8px; }
       .store-head {
         display: flex; align-items: center; justify-content: space-between;
