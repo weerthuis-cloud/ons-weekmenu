@@ -778,12 +778,18 @@ export function ShoppingView(state) {
       .ignore-btn:hover { opacity: 1; color: oklch(50% 0.18 28); }
       .dup-mark { font-size: 11px; color: var(--ink-3); margin-left: 4px; cursor: help; }
 
-      /* v2.2c: dag-filter chips zien er op desktop hetzelfde uit als de
-         andere chips (pill, eigen breedte). Alleen op mobile uitgerekt in
-         een 7-koloms grid omdat ze daar anders zouden wrappen. */
+      /* v2.2c/d: dag-filter chips. Op desktop pill (zoals andere chips),
+         op mobile uitgerekt in 7-koloms grid. Active state is donker
+         (var(--ink)) zoals de week-nav-chips. */
       .day-filter-block { display: flex; flex-direction: column; gap: 8px; }
       .day-chip-grid { display: flex; gap: 6px; flex-wrap: nowrap; }
       .day-chip { cursor: pointer; }
+      .day-chip.is-on {
+        background: var(--ink);
+        color: var(--bg);
+        border-color: var(--ink);
+        font-weight: 700;
+      }
       .day-quick { display: flex; gap: 6px; flex-wrap: wrap; }
       .chip.small { font-size: 11px; padding: 4px 10px; }
       @media (max-width: 720px) {
@@ -793,10 +799,11 @@ export function ShoppingView(state) {
           gap: 4px;
         }
         .day-chip {
-          padding: 6px 0;
-          min-width: 0;
           width: 100%;
-          text-align: center;
+          min-width: 0;
+          padding: 0;
+          height: 32px;
+          justify-content: center;   /* tekst gecentreerd in inline-flex */
           font-size: 11px;
         }
         .chip.small { font-size: 10px; padding: 3px 8px; }
