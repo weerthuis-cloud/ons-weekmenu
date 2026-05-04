@@ -217,8 +217,14 @@ function renderSwapPanel() {
 
 function renderRecipe(text) {
   if (!text) return null;
-  // Splits per regel, render per regel met mini-formatting
-  const lines = text.split('\n');
+  // v1.9d: knip "Personen: …" regel en de hele "Ingrediënten"-sectie weg —
+  // die info staat nu via de eters-chips + geschaalde lijst bovenaan.
+  let cleaned = text;
+  // 1. Verwijder "Personen: X · Bereidingstijd: …" regel
+  cleaned = cleaned.replace(/^\s*\*?\*?Personen:[^\n]*\n?/im, '');
+  // 2. Knip alles vanaf de "Ingrediënten" kop af (mits aanwezig)
+  cleaned = cleaned.replace(/\n\s*\*?\*?Ingredi[ëe]nten[^\n]*[\s\S]*$/i, '');
+  const lines = cleaned.split('\n');
   const out = [];
   let listBuf = [];
   const flushList = () => {
