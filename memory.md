@@ -525,3 +525,56 @@ Bij elke nieuwe weekly PDF-import via Cowork:
 Onderliggend principe: alleen de aggregator-flow ziet items uit verschillende meals. Als ingrediëntnamen niet exact matchen, krijg je dubbele rijen in de boodschappenlijst. Vooraf afstemmen scheelt herstelwerk achteraf.
 
 ---
+
+## 2026-05-04 — v1.9b/c/d/e: meal-detail eters-chips + slot-iconen + recept-strip
+
+**v1.9b: eters-chips in meal-detail.** Voor diner-recepten verschijnt boven het recept een chip-rij `1 eter / 2 eters / 3 eters / 4 eters` plus een geschaalde ingrediëntenlijst (uit `scaleRecipeIngredients`). Klik op chip → `setWeekMealsPorties` met dat record-id. Geen automatische sync naar shopping_list — Peter doet handmatig "Bijwerken" via recepten-paneel als hij wil dat boodschappen meegaan.
+
+**v1.9c: slot-iconen weg.** `SlotIcon` retourneert nu altijd `null` — eerst alleen non-diner verborgen, daarna ook diner voor consistente uitlijning in week/day-view. Versie-pill rechts in topbar weggehaald (brand-pill links blijft).
+
+**v1.9d: recept-strip Personen + Ingrediënten.** `renderRecipe()` in meal-detail strippt twee secties uit de markdown vóór render: `^Personen: ...` regel én alles vanaf `Ingrediënten`-kop. Die info komt nu via de eters-chips + geschaalde lijst bovenaan. Diff regex: `/^\s*\*?\*?Personen:[^\n]*\n?/im` en `/\n\s*\*?\*?Ingredi[ëe]nten[^\n]*[\s\S]*$/i`.
+
+**v1.9e: laatste slot-icoon (diner) ook weg.** Visuele regressie waardoor diner-rijen anders uitlijnden dan andere slots.
+
+**Deploy-glitch.** v1.9d's deploy faalde met GitHub Pages 502. Re-run loste het op. Geen code-issue. De Pages CDN cachet bovendien soms een oude versie kort na deploy — twee pull-to-refreshes in Safari tonen meestal de nieuwe.
+
+---
+
+## 2026-05-04 — v2.0: dag-filter in boodschappenlijst
+
+**Nieuwe filter-rij** boven de open items: `Ma Di Wo Do Vr Za Zo` als toggle-knoppen plus `alles / vandaag / +morgen` snel-keuzes rechts. Default alle 7 dagen aan. Persistent in `localStorage.owm.selectedDays` (Set serialized als array).
+
+**Filter-logica.** `itemHasDayInSelection(item)` filtert items zonder source in geselecteerde dagen weg. `itemQtyForSelection(item)` herrekent qty op basis van alleen geselecteerde source.day's. Werkt voor alle slots automatisch want elke source heeft `source.day` sinds v1.3.
+
+**Bug die ik moest fixen.** Door dag-filter werd in de view-laag een NIEUW item-object gemaakt (`{...it, qty: ...}`) als de filtered qty afweek. `toggleChecked(idx)` gebruikte daarna de index in de gefilterde lijst om vs.items te muteren — totaal verkeerd item. Oplossing in v2.0a: `toggleChecked` en `commitEditQty` werken nu op `itemKey` ipv index.
+
+**Categorisatie-bug.** Reclassify-pass in `loadAll` gebruikte `name.toLowerCase().trim()` zonder `normalizeName`. "Biefstuk, gebakken in roomboter" hield "biefstuk," (met komma) → geen match → substring-fallback won met "roomboter" → zuivel_eieren. Fix: `classifyIngredient(normalizeName(name))` gebruiken op alle reclassify-plekken (loadAll, generateOrRefresh recipe-only items, addNote).
+
+**Clustering binnen categorie.** `groupByCategory` sorteert items binnen elke categorie nu op basisnaam (eerste woord van genormaliseerde naam) → "Kaas", "Kaas, geraspt" en "Kaas naar keuze" staan altijd onder elkaar.
+
+**Route-keuze (AH/Jumbo/Lidl) verwijderd.** Op verzoek; `lib/winkelroutes.js` blijft staan voor mogelijk hergebruik.
+
+**P/M-cirkels weg.** Op verzoek; `who[]` blijft in items voor toekomstig gebruik.
+
+**Layout.** `name-col` krijgt `min-width: 0` + `overflow: hidden` + `word-break: normal` + `overflow-wrap: break-word` + `hyphens: auto` (samen met `<html lang="nl">` voor Nederlandse hyphenation). Lange compounds zoals "Kippenbouillontablet" breken nu op lettergrepen ipv mid-letter.
+
+**Recept-markering.** Eerst stipjes per recept-dag (v2.0d) → toen Word-stijl highlighter met dag-kleur background (v2.0e) → uiteindelijk terug naar stipjes (v2.0g) op verzoek. `recipeDaysFor(item)` returnt unieke recipeKey-dagen; alleen items met source.recipeKey krijgen markering.
+
+---
+
+## 2026-05-04 — v2.1: CI tests + extra dekking
+
+**CI runt nu `npm test`.** In `.github/workflows/deploy.yml` tussen install en build. Bij failing test: build stopt, geen deploy. Tot v2.1 ging een breaking change ongemerkt door naar productie.
+
+**Nieuwe tests** in `app/test/helpers.test.js`. 29 extra tests dekken:
+- Classifier substring-fallback voor compound names ("Biefstuk, gebakken in roomboter", etc.) — exact de regressie van v2.0b.
+- `normalizeName` randgevallen (parens, bereiding, "naar keuze", slash).
+- `itemHasDayInSelection` en `itemQtyForSelection` (de v2.0 dag-filter logic) — duplicate van de view-helpers, want pure functies zijn makkelijk los te testen.
+- `recipeDaysFor` — alleen recipe-bronnen tellen, dedup per dag.
+- `loadIgnored / saveIgnored / addIgnored / removeIgnored` (lib/ignored.js) met gemockte `localStorage`.
+
+Totaal 66 tests groen.
+
+**Pending v1.1d (drag-and-drop) geschrapt.** Verplaats/ruil-knoppen in meal-detail dekken het use-case voldoende.
+
+---
