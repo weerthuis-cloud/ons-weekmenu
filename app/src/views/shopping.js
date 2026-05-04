@@ -13,6 +13,7 @@ import { aggregateShopping, groupByCategory, groupByStore, itemKey,
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { ROUTES, ROUTE_LABELS } from '../lib/winkelroutes.js';
+import { DAY_HUE, dayColor, isRecipeIncomplete, houseIcon } from '../lib/recipe-helpers.js';
 import { Checkbox } from '../components/checkbox.js';
 import { rerender, state as appState, actions as appActions } from '../main.js';
 
@@ -44,9 +45,7 @@ const vs = {
   notesOpen: true,
 };
 
-// v1.3: dag-kleuren (oklch hue per dag-index 1-7).
-const DAY_HUE = { 1: 280, 2: 145, 3: 28, 4: 85, 5: 350, 6: 50, 7: 175 };
-function dayColor(day) { return `oklch(70% 0.16 ${DAY_HUE[day] || 240})`; }
+// (v1.7 #4: DAY_HUE/dayColor verhuisd naar lib/recipe-helpers.js)
 
 function ensureInit() {
   if (vs.initialized) return;
@@ -238,6 +237,15 @@ async function toggleChecked(idx) {
   catch (err) { vs.error = err.message; rerender(); }
 }
 
+// v1.7 #2: 'in huis'-toggle. Item gaat naar aparte sectie zonder gekocht te worden.
+async function toggleInHouse(idx) {
+  const next = vs.items.map((x, i) => i === idx ? { ...x, inHouse: !x.inHouse } : x);
+  vs.items = next;
+  rerender();
+  try { vs.list = await updateShoppingList({ id: vs.list.id, items: next }); }
+  catch (err) { vs.error = err.message; rerender(); }
+}
+
 function startEditQty(key) {
   vs.editingKey = key;
   rerender();
@@ -282,6 +290,8 @@ async function deleteList() {
   vs.list = null; vs.items = []; rerender();
 }
 
+// (v1.7 #4: isRecipeIncomplete verhuisd naar lib/recipe-helpers.js)
+
 // v1.2/1.3: groepeer diner-week_meals per (day, meal_id) zodat gedeelde
 // maaltijden (Peter + Miranda hebben hetzelfde recept) als één rij verschijnen.
 // Per groep bewaren we ook het meal-object (voor scaleRecipeIngredients).
@@ -325,13 +335,16 @@ async function setGroupPorties(group, n) {
   group.porties = n;
   rerender();
   try {
-    // v1.3 bulk-update voorkomt race-condition (zie data.js).
     const ids = group.records.map(r => r.id);
     const weekIds = [...new Set(group.records.map(r => r.weekId).filter(Boolean))];
     await setWeekMealsPorties({ ids, weekIds, porties: n });
-    // Als dit recept al akkoord was, herrekenen met nieuwe porties.
     const recipeKey = recipeKeyOf(group.day, group.mealId);
-    if (approvedRecipeKeys(vs.items).has(recipeKey)) {
+    const isApproved = approvedRecipeKeys(vs.items).has(recipeKey);
+    // v1.7 #5: porties=0 → skip (uit eten). Verwijder items uit lijst.
+    if (n === 0) {
+      if (isApproved) await unapproveRecipe(group);
+      else await generateOrRefresh();
+    } else if (isApproved) {
       await approveRecipe(group);
     } else {
       await generateOrRefresh();
@@ -447,13 +460,14 @@ function setRouteStore(id) {
   rerender();
 }
 
-function setModus(modus) { vs.modus = modus; loadAll(); }
+function setModus(modus) { vs.modus = modus; vs.recipes = {}; loadAll(); }
 function setStoreFilter(s) { vs.storeFilter = s; rerender(); }
 function changeWeek(delta) {
   vs.week += delta;
   if (vs.week < 1) { vs.week = 52; vs.year -= 1; }
   else if (vs.week > 52) { vs.week = 1; vs.year += 1; }
   appActions.setViewWeek(vs.year, vs.week);
+  vs.recipes = {};   // v1.7 #3: nieuwe week → reset uitgeklapte recepten
   loadAll();
 }
 
@@ -464,9 +478,10 @@ export function ShoppingView(state) {
   const filteredItems = vs.storeFilter === 'all'
     ? all
     : all.filter(it => it.store === vs.storeFilter);
-  // Splits open en afgevinkt; open items per categorie, afgevinkt apart onderaan.
-  const openItems = filteredItems.filter(i => !i.checked);
-  const doneItems = filteredItems.filter(i => i.checked);
+  // v1.7 #2: drie buckets — open / in huis / afgevinkt.
+  const openItems    = filteredItems.filter(i => !i.checked && !i.inHouse);
+  const inHouseItems = filteredItems.filter(i => !i.checked &&  i.inHouse);
+  const doneItems    = filteredItems.filter(i =>  i.checked);
   const groups = groupByCategory(openItems);
   // v1.6: hersorteer categorie-cards op winkelroute (alleen als niet-standaard)
   const route = ROUTES[vs.routeStore];
@@ -560,6 +575,7 @@ export function ShoppingView(state) {
         ${groups.map(group => renderCategoryCard(group, all))}
       </div>
 
+      ${inHouseItems.length > 0 ? renderInHouseSection(inHouseItems, all) : nothing}
       ${doneItems.length > 0 ? renderDoneSection(doneItems, all) : nothing}
     </section>
 
@@ -631,6 +647,28 @@ export function ShoppingView(state) {
         padding: 14px 18px;
         margin-top: 4px;
       }
+      .inhouse-card {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--r-lg);
+        padding: 14px 18px;
+        margin-top: 4px;
+      }
+      .item-row.is-inhouse { opacity: 0.7; }
+      .item-row.is-inhouse .name { font-style: italic; }
+      .house-btn {
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        width: 28px; height: 28px;
+        display: inline-flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        color: var(--ink-3);
+        flex-shrink: 0;
+        padding: 0;
+      }
+      .house-btn:hover { color: var(--ink); border-color: var(--ink); }
+      .house-btn.is-on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
       .done-head { margin-bottom: 8px; }
       .store-head {
         display: flex; align-items: center; justify-content: space-between;
@@ -811,6 +849,10 @@ export function ShoppingView(state) {
         background: var(--ink); color: var(--bg); border-color: var(--ink);
         font-weight: 700;
       }
+      .dp-chip-skip { font-size: 14px; }
+      .dp-row-wrap.is-skip .dp-name { text-decoration: line-through; opacity: 0.6; }
+      .dp-skip-tag { font-size: 10px; font-style: italic; color: var(--ink-3); padding: 2px 6px; background: var(--bg-2); border-radius: 999px; }
+      .dp-warn { font-size: 14px; color: var(--tomato, oklch(60% 0.18 28)); cursor: help; }
 
       /* v1.3 expand-paneel */
       .recipe-expand {
@@ -906,14 +948,21 @@ function renderDinerPortions() {
           const isApproved = approved.has(key);
           const dayCol = dayColor(g.day);
           return html`
-            <li class="dp-row-wrap ${expanded ? 'is-open' : ''} ${isApproved ? 'is-approved' : ''}">
+            <li class="dp-row-wrap ${expanded ? 'is-open' : ''} ${isApproved ? 'is-approved' : ''} ${cur === 0 ? 'is-skip' : ''} ${isRecipeIncomplete(g.meal) ? 'is-incomplete' : ''}">
               <div class="dp-row" @click=${() => toggleRecipeExpand(g)}>
                 <span class="dp-day-dot" style="background:${dayCol};"></span>
                 <span class="dp-day">${DAGEN_KORT[g.day - 1] || ('d' + g.day)}</span>
                 <span class="dp-name">${g.mealName}</span>
-                ${isApproved ? html`<span class="dp-badge" title="recept staat in de boodschappenlijst">✓</span>` : ''}
+                ${isRecipeIncomplete(g.meal) ? html`<span class="dp-warn" title="recept mist ingrediënten of porties — vul aan via Maker → Bewerken">⚠</span>` : ''}
+                ${cur === 0 ? html`<span class="dp-skip-tag">uit eten</span>` : ''}
+                ${isApproved && cur > 0 ? html`<span class="dp-badge" title="recept staat in de boodschappenlijst">✓</span>` : ''}
                 <span class="dp-spacer"></span>
                 <div class="dp-chips" @click=${(e) => e.stopPropagation()}>
+                  <button
+                    class="dp-chip dp-chip-skip ${cur === 0 ? 'is-on' : ''}"
+                    @click=${() => setGroupPorties(g, 0)}
+                    title="overslaan / uit eten"
+                  >—</button>
                   ${[1, 2, 3, 4].map(n => html`
                     <button
                       class="dp-chip ${cur === n ? 'is-on' : ''}"
@@ -954,6 +1003,11 @@ function renderRecipeExpand(group) {
   const hue = DAY_HUE[group.day] || 240;
   return html`
     <div class="recipe-expand" style="border-left-color:${dayColor(group.day)};">
+      ${scaled.length === 0 ? html`
+        <p class="cmt" style="padding: 8px 0;">
+          ⚠ Dit recept heeft nog geen ingrediënten. Open <a href="#maker" style="color: var(--ink); text-decoration: underline;">Maker → bewerken</a> om ze toe te voegen voor 4 personen, samen met <code>serves: 4</code>.
+        </p>
+      ` : nothing}
       <ul class="recipe-ings">
         ${scaled.map(ing => {
           const isExcluded = state.excluded.has(ing.name);
@@ -1024,6 +1078,34 @@ function renderNotesPanel() {
   `;
 }
 
+function renderInHouseSection(items, allItems) {
+  return html`
+    <div class="inhouse-card">
+      <div class="done-head">
+        <div class="cmt">// in huis — ${items.length} ${items.length === 1 ? 'item' : 'items'}</div>
+      </div>
+      <ul class="item-list">
+        ${items.map(item => {
+          const idx = allItems.indexOf(item);
+          return html`
+            <li class="item-row is-inhouse">
+              <button class="house-btn is-on" title="in huis — klik om terug te zetten" @click=${() => toggleInHouse(idx)}>
+                ${houseIcon()}
+              </button>
+              <div class="name-col">
+                <span class="name">${item.name}</span>
+              </div>
+              <span class="qty">${item.qty != null ? formatQty(item.qty, item.unit) : ''}</span>
+            </li>
+          `;
+        })}
+      </ul>
+    </div>
+  `;
+}
+
+// (v1.7 #4: houseIcon verhuisd naar lib/recipe-helpers.js)
+
 function renderDoneSection(doneItems, allItems) {
   return html`
     <div class="done-card">
@@ -1082,6 +1164,9 @@ function renderCategoryCard(group, allItems) {
               <span @click=${() => toggleChecked(idx)}>
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
               </span>
+              <button class="house-btn" title="markeer als al in huis" @click=${(e) => { e.stopPropagation(); toggleInHouse(idx); }}>
+                ${houseIcon()}
+              </button>
               <div class="name-col" @click=${() => toggleChecked(idx)}>
                 <span class="name">${item.name}</span>
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
