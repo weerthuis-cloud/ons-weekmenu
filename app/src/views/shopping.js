@@ -9,11 +9,13 @@ import { listProfiles, getWeek, getWeekMeals,
 import { classifyIngredient } from '../lib/categorie.js';
 import { aggregateShopping, groupByCategory, groupByStore, itemKey,
          scaleRecipeIngredients, mergeRecipeIntoItems, removeRecipeFromItems,
-         approvedRecipeKeys, approvedIngredientNamesForRecipe, recipeKeyOf } from '../lib/shopping.js';
+         approvedRecipeKeys, approvedIngredientNamesForRecipe, recipeKeyOf,
+         normalizeName } from '../lib/shopping.js';
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { ROUTES, ROUTE_LABELS } from '../lib/winkelroutes.js';
 import { DAY_HUE, dayColor, isRecipeIncomplete } from '../lib/recipe-helpers.js';
+import { loadIgnored, saveIgnored as saveIgnoredSet, onIgnoredChange, notifyIgnoredChange } from '../lib/ignored.js';
 import { Checkbox } from '../components/checkbox.js';
 import { rerender, state as appState, actions as appActions } from '../main.js';
 
@@ -39,6 +41,8 @@ const vs = {
   recipes: {},
   // v1.6: gekozen winkelroute (standaard / ah / jumbo / lidl), persistent in localStorage
   routeStore: (typeof localStorage !== 'undefined' && localStorage.getItem('owm.routeStore')) || 'standaard',
+  // v1.9: permanent genegeerde ingrediënt-namen (lowercase normalized), persistent in localStorage
+  ignored: new Set(loadIgnored()),
   // Notities
   notes: [],
   noteInput: '',
@@ -46,6 +50,19 @@ const vs = {
 };
 
 // (v1.7 #4: DAY_HUE/dayColor verhuisd naar lib/recipe-helpers.js)
+
+// v1.9: negeer-lijst gebruikt gedeelde lib/ignored.js
+function isIgnored(item) {
+  return vs.ignored.has(normalizeName(item.name));
+}
+async function ignoreItem(item) {
+  const key = normalizeName(item.name);
+  if (!confirm(`"${item.name}" voortaan altijd weglaten uit de boodschappenlijst? (te beheren via Bibliotheek)`)) return;
+  vs.ignored.add(key);
+  saveIgnoredSet(vs.ignored);
+  notifyIgnoredChange();
+  rerender();
+}
 
 function ensureInit() {
   if (vs.initialized) return;
@@ -57,6 +74,8 @@ function ensureInit() {
     if (scope === 'shopping_lists' || scope === 'meals' || scope === 'week_meals' || scope === 'weeks') loadAll();
     if (scope === 'shopping_notes') loadNotes();
   });
+  // v1.9: refresh de view als negeer-lijst extern wordt aangepast (bv. via Bibliotheek)
+  onIgnoredChange(() => { vs.ignored = new Set(loadIgnored()); rerender(); });
   queueMicrotask(loadAll);
   queueMicrotask(loadNotes);
   appActions.setViewWeek(vs.year, vs.week);
@@ -492,9 +511,18 @@ export function ShoppingView(state) {
     ? all
     : all.filter(it => it.store === vs.storeFilter);
   // Open + afgevinkt — vinkje markeert beide 'al in huis' en 'gekocht'.
-  const openItems = filteredItems.filter(i => !i.checked);
-  const doneItems = filteredItems.filter(i =>  i.checked);
+  // v1.9: filter ook permanent genegeerde ingrediënten (water etc).
+  const visibleItems = filteredItems.filter(i => !isIgnored(i));
+  const openItems = visibleItems.filter(i => !i.checked);
+  const doneItems = visibleItems.filter(i =>  i.checked);
   const groups = groupByCategory(openItems);
+
+  // v1.9: tel hoe vaak een normalized name voorkomt (≈ markering bij meerdere units)
+  const nameCounts = new Map();
+  for (const it of visibleItems) {
+    const k = normalizeName(it.name);
+    nameCounts.set(k, (nameCounts.get(k) || 0) + 1);
+  }
   // v1.6: hersorteer categorie-cards op winkelroute (alleen als niet-standaard)
   const route = ROUTES[vs.routeStore];
   if (route) {
@@ -584,7 +612,7 @@ export function ShoppingView(state) {
       ` : nothing}
 
       <div class="store-grid">
-        ${groups.map(group => renderCategoryCard(group, all))}
+        ${groups.map(group => renderCategoryCard(group, all, nameCounts))}
       </div>
 
       ${doneItems.length > 0 ? renderDoneSection(doneItems, all) : nothing}
@@ -659,6 +687,14 @@ export function ShoppingView(state) {
         margin-top: 4px;
       }
       /* (v1.8c: in-huis-toggle weggehaald — geen .house-btn / .inhouse-card meer) */
+      .ignore-btn {
+        background: transparent; border: none; color: var(--ink-3);
+        cursor: pointer; font-size: 16px; line-height: 1;
+        width: 24px; height: 24px; padding: 0; flex-shrink: 0;
+        opacity: 0.4; transition: opacity .15s, color .15s;
+      }
+      .ignore-btn:hover { opacity: 1; color: oklch(50% 0.18 28); }
+      .dup-mark { font-size: 11px; color: var(--ink-3); margin-left: 4px; cursor: help; }
       .done-head { margin-bottom: 8px; }
       .store-head {
         display: flex; align-items: center; justify-content: space-between;
@@ -1101,7 +1137,7 @@ function itemHighlightedByOpenRecipe(item) {
   return null;
 }
 
-function renderCategoryCard(group, allItems) {
+function renderCategoryCard(group, allItems, nameCounts) {
   return html`
     <div class="store-card">
       <div class="store-head">
@@ -1127,7 +1163,10 @@ function renderCategoryCard(group, allItems) {
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
               </span>
               <div class="name-col" @click=${() => toggleChecked(idx)}>
-                <span class="name">${item.name}</span>
+                <span class="name">
+                  ${item.name}
+                  ${(nameCounts?.get(normalizeName(item.name)) || 0) > 1 ? html`<span class="dup-mark" title="lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen">≈</span>` : ''}
+                </span>
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
               </div>
               <span class="who">
@@ -1158,6 +1197,7 @@ function renderCategoryCard(group, allItems) {
                         : html`<span class="qty-empty">+ qty</span>`}
                 </button>
               `}
+              <button class="ignore-btn" title="negeer altijd (water, zout, etc.)" @click=${(e) => { e.stopPropagation(); ignoreItem(item); }}>×</button>
             </li>
           `;
         })}

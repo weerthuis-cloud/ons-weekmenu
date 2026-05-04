@@ -144,6 +144,10 @@ export function itemKey(item) {
   return `${normalizeName(item.name)}::${item.unit}::${item.store}`;
 }
 
+// v1.9: export normalizeName zodat de view 'm kan gebruiken voor ignore-filter
+// en combineer-detectie.
+export { normalizeName };
+
 // ============================================================
 // v1.3: per-recept akkoord-flow
 // ============================================================

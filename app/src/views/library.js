@@ -2,6 +2,7 @@
 import { html, nothing } from 'lit-html';
 import { listProfiles, listWeeks, countSlotsByWeek, addWeek, getWeek, duplicateWeekMeals, onDataChange,
          exportAllData, restoreFromBackup, deleteWeeksOlderThan, wipeAllUserData } from '../lib/data.js';
+import { loadIgnored, removeIgnored, notifyIgnoredChange } from '../lib/ignored.js';
 import { formatWeekRange, todayInfo } from '../lib/datums.js';
 import { rerender } from '../main.js';
 import { setRoute } from '../router.js';
@@ -361,10 +362,17 @@ async function doWipeAll() {
   }
 }
 
+function unignoreItem(name) {
+  removeIgnored(name);
+  notifyIgnoredChange();
+  rerender();
+}
+
 function renderMaintenancePanel() {
+  const ignored = loadIgnored();
   return html`
     <div class="maint-panel">
-      <div class="cmt">// onderhoud — backup en AVG-cleanup</div>
+      <div class="cmt">// onderhoud — backup, negeer-lijst, AVG-cleanup</div>
       <div class="maint-row">
         <button class="btn" @click=${doDownloadBackup}>↓ download backup (.json)</button>
         <span class="cmt">Alle tabellen als JSON. Bewaar lokaal als veiligheidskopie.</span>
@@ -373,6 +381,21 @@ function renderMaintenancePanel() {
         <label class="btn ghost" for="owm-restore-input" style="cursor:pointer;">↑ herstel uit backup</label>
         <input id="owm-restore-input" type="file" accept="application/json" style="display:none;" @change=${doRestoreBackup} />
         <span class="cmt">Overschrijft alle huidige data met de inhoud van een eerdere backup.</span>
+      </div>
+      <div class="maint-row maint-ignored">
+        <div class="maint-ignored-head">
+          <span class="cmt">// genegeerde ingrediënten (komen niet op de lijst)</span>
+        </div>
+        ${ignored.length === 0
+          ? html`<span class="cmt" style="font-style:italic;">Nog geen items genegeerd. Klik in de boodschappenlijst op het × naast een item om er een toe te voegen.</span>`
+          : html`<ul class="ignored-list">
+              ${ignored.map(name => html`
+                <li class="ignored-row">
+                  <span>${name}</span>
+                  <button class="btn ghost small" @click=${() => unignoreItem(name)}>terug op lijst</button>
+                </li>
+              `)}
+            </ul>`}
       </div>
       <div class="maint-row">
         <button class="btn ghost" @click=${doDeleteOldWeeks}>wis weken ouder dan 8 weken</button>
@@ -395,6 +418,10 @@ function renderMaintenancePanel() {
       .maint-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       .maint-row .btn { min-width: 200px; }
       .maint-row .cmt { font-size: 12px; color: var(--ink-3); }
+      .maint-ignored { flex-direction: column; align-items: stretch; gap: 6px; }
+      .ignored-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+      .ignored-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-2); border-radius: 6px; font-size: 13px; }
+      .ignored-row .btn.small { height: 26px; padding: 0 10px; font-size: 11px; }
       .btn.ghost.danger { color: oklch(40% 0.14 28); border-color: oklch(85% 0.08 28); }
       .btn.ghost.danger:hover { background: var(--tomato-tint); }
       @media (max-width: 720px) {

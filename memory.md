@@ -507,3 +507,21 @@ Generieke layouts (niet filiaal-specifiek). Iemand met meer info kan later finet
 **Schema-status.** `supabase/schema.sql` bijgewerkt voor `meals.recipe` (was missing sinds v0.9) en `meals.serves` (v1.2). Niet expliciet bijgewerkt voor v1.3+ items-format want JSONB-blob veranderingen vergen geen DDL.
 
 ---
+
+## 2026-05-02 — v1.9: negeer-lijst, combineer-detectie, import-routine
+
+**Negeer-lijst.** Nieuw bestand `lib/ignored.js` met load/save/add/remove + onIgnoredChange listener. Persistent in `localStorage.owm.ignored` (Set van genormaliseerde namen). Per item-rij in de boodschappenlijst een `×`-knop → confirm → naam in negeer-set → aggregator filtert ze voortaan in de view (`isIgnored(item)` na load + render). Beheer in Bibliotheek-onderhoud-paneel: lijst van genegeerde namen met "terug op lijst"-knop. Gebruikssituatie: water (kraan), zout, peper.
+
+**Combineer-detectie.** In de view bouw ik een `nameCounts` Map (genormaliseerde naam → aantal items). Items waar count > 1 krijgen een `≈` icoon naast de naam met tooltip "lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen". Geen auto-merge want unit-conversie (st ↔ g) is niet betrouwbaar te doen. Gebruikssituatie: "Kaas 1 st" en "Kaas naar keuze 120 g" — beide normaliseren naar 'kaas' maar units verschillen. Geraspte kaas blijft eigen rij omdat "Kaas, geraspt" naar 'kaas geraspt' normaliseert (komma stript naar spatie, niet weg).
+
+**Import-routine — werkafspraak voor mij (Claude).**
+Bij elke nieuwe weekly PDF-import via Cowork:
+1. Verzamel alle nieuwe ingredient-namen (uit nieuwe meals plus toegevoegde aan bestaande meals).
+2. Vergelijk met bestaande in `meals.ingredients` (alle non-deleted meals).
+3. Bij gelijkenis (substring na normalizeName, of duidelijke synoniemen zoals "balletjes" ↔ "vleesballetjes"), maak een mini-rapport voor Peter: `Nieuw: "X"  ↔  bestaand: "Y" — samenvoegen?`
+4. Voer pas de import uit als Peter expliciet keuzes heeft gemaakt: behoud apart, of normaliseer alle voorkomens naar één naam.
+5. Na import: optioneel een "wis duplicaten" SQL-update als Peter dat goedkeurt.
+
+Onderliggend principe: alleen de aggregator-flow ziet items uit verschillende meals. Als ingrediëntnamen niet exact matchen, krijg je dubbele rijen in de boodschappenlijst. Vooraf afstemmen scheelt herstelwerk achteraf.
+
+---
