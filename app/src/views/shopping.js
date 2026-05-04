@@ -1286,10 +1286,6 @@ function renderCategoryCard(group, allItems, nameCounts) {
                 })()}
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
               </div>
-              <span class="who">
-                ${item.who.includes('peter')   ? html`<span class="person-tag peter">P</span>`   : ''}
-                ${item.who.includes('miranda') ? html`<span class="person-tag miranda">M</span>` : ''}
-              </span>
               ${isEditing ? html`
                 <input
                   class="qty-edit-input"
