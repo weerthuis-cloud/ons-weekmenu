@@ -806,8 +806,11 @@ export function ShoppingView(state) {
       .item-row.is-highlighted { background: var(--bg-2); }
       .row-mark { font-weight: 700; font-size: 14px; width: 10px; text-align: center; flex-shrink: 0; }
       .item-row.is-done .name, .item-row.is-done .qty { text-decoration: line-through; }
-      .item-row .name-col { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; }
-      .item-row .name { font-size: 14px; font-weight: 500; }
+      .item-row .name-col { flex: 1 1 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; overflow: hidden; }
+      .item-row .name { font-size: 14px; font-weight: 500; word-break: break-word; overflow-wrap: anywhere; }
+      .item-row .who { flex-shrink: 0; }
+      .recipe-dots { display: inline-flex; gap: 3px; margin-right: 6px; vertical-align: middle; }
+      .recipe-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
       .item-row .variant-hint { font-size: 10px; color: var(--ink-3); font-style: italic; }
       .item-row .qty { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
 
@@ -1225,6 +1228,16 @@ function itemHighlightedByOpenRecipe(item) {
   return null;
 }
 
+// v2.0d: unieke dag-nummers van recipe-sources (sources met recipeKey).
+// Voor solo-meal items returnen lege array — geen bolletjes.
+function recipeDaysFor(item) {
+  const days = new Set();
+  for (const s of (item.sources || [])) {
+    if (s.recipeKey && s.day) days.add(s.day);
+  }
+  return [...days].sort((a, b) => a - b);
+}
+
 function renderCategoryCard(group, allItems, nameCounts) {
   return html`
     <div class="store-card">
@@ -1252,6 +1265,10 @@ function renderCategoryCard(group, allItems, nameCounts) {
               </span>
               <div class="name-col" @click=${() => toggleChecked(key)}>
                 <span class="name">
+                  ${(() => {
+                    const days = recipeDaysFor(item);
+                    return days.length > 0 ? html`<span class="recipe-dots">${days.map(d => html`<span class="recipe-dot" style="background:${dayColor(d)};" title="${DAGEN_KORT[d-1] || ('d'+d)}"></span>`)}</span>` : '';
+                  })()}
                   ${item.name}
                   ${(nameCounts?.get(normalizeName(item.name)) || 0) > 1 ? html`<span class="dup-mark" title="lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen">≈</span>` : ''}
                 </span>
