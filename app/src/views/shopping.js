@@ -147,6 +147,13 @@ async function loadAll() {
     else {
       vs.list = await getShoppingList({ ownerId: appState.auth.profile.id, weekIds });
       vs.items = vs.list?.items || [];
+      // v1.8: cache list lokaal voor offline-leesbaarheid in de winkel.
+      if (vs.list) {
+        try {
+          localStorage.setItem(`owm.list.${vs.modus}.${vs.year}.${vs.week}`,
+            JSON.stringify({ list: vs.list, items: vs.items, savedAt: Date.now() }));
+        } catch (e) { /* quota exceeded — niet kritisch */ }
+      }
       // Geen lijst voor deze selectie? Auto-genereer.
       if (!vs.list) {
         vs.loading = false;
@@ -167,7 +174,20 @@ async function loadAll() {
       }
     }
   } catch (err) {
-    vs.error = err.message;
+    // v1.8: bij netwerk-fail probeer offline-cache uit localStorage.
+    try {
+      const raw = localStorage.getItem(`owm.list.${vs.modus}.${vs.year}.${vs.week}`);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        vs.list = cached.list;
+        vs.items = cached.items || [];
+        vs.error = `Offline — toon opgeslagen lijst van ${new Date(cached.savedAt).toLocaleString('nl-NL')}`;
+      } else {
+        vs.error = err.message;
+      }
+    } catch (e) {
+      vs.error = err.message;
+    }
   } finally {
     vs.loading = false;
     rerender();

@@ -8,6 +8,14 @@ import { initRouter, getRoute } from './router.js';
 import { initAuth, onAuthChange, getAuthState, signOut } from './lib/auth.js';
 import { todayInfo } from './lib/datums.js';
 
+// v1.8: registreer service worker voor offline-cache.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const swUrl = (import.meta.env.BASE_URL || '/') + 'sw.js';
+    navigator.serviceWorker.register(swUrl).catch(err => console.warn('SW register failed:', err));
+  });
+}
+
 const _today = todayInfo();
 
 export const state = {

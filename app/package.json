@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host",
-    "deploy": "vite build && gh-pages -d dist"
+    "deploy": "vite build && gh-pages -d dist",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "lit-html": "^3.2.1",

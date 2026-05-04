@@ -453,3 +453,92 @@ export async function getPdfDownloadUrl(path, expiresIn = 60) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+// ============================================================
+// v1.8: Backup-export — alle tabellen als één JSON-blob.
+// ============================================================
+export async function exportAllData() {
+  const [profiles, meals, weeks, week_meals, shopping_lists, shopping_notes] = await Promise.all([
+    supabase.from('profiles').select('*'),
+    supabase.from('meals').select('*'),
+    supabase.from('weeks').select('*'),
+    supabase.from('week_meals').select('*'),
+    supabase.from('shopping_lists').select('*'),
+    supabase.from('shopping_notes').select('*'),
+  ]);
+  for (const r of [profiles, meals, weeks, week_meals, shopping_lists, shopping_notes]) {
+    if (r.error) throw r.error;
+  }
+  return {
+    exportedAt: new Date().toISOString(),
+    appVersion: 'v1.8',
+    profiles:        profiles.data || [],
+    meals:           meals.data || [],
+    weeks:           weeks.data || [],
+    week_meals:      week_meals.data || [],
+    shopping_lists:  shopping_lists.data || [],
+    shopping_notes:  shopping_notes.data || [],
+  };
+}
+
+// ============================================================
+// v1.8: AVG-cleanup — verwijder weken (+cascade) ouder dan datum.
+// PDFs in storage worden ook gewist als pdf_path bekend is.
+// ============================================================
+export async function deleteWeeksOlderThan(cutoffYear, cutoffWeek) {
+  // Vind te-verwijderen weken
+  const { data: weeks, error: e1 } = await supabase
+    .from('weeks')
+    .select('id, year, week_nr, pdf_path')
+    .or(`year.lt.${cutoffYear},and(year.eq.${cutoffYear},week_nr.lt.${cutoffWeek})`);
+  if (e1) throw e1;
+  if (!weeks?.length) return { deletedWeeks: 0, deletedPdfs: 0 };
+
+  // Verwijder PDFs uit storage
+  const pdfPaths = weeks.filter(w => w.pdf_path).map(w => w.pdf_path);
+  let deletedPdfs = 0;
+  if (pdfPaths.length > 0) {
+    const { error: e2 } = await supabase.storage.from('dietist-pdfs').remove(pdfPaths);
+    if (!e2) deletedPdfs = pdfPaths.length;
+  }
+
+  // Verwijder weeks (cascade wist week_meals + shopping_lists via FK)
+  const ids = weeks.map(w => w.id);
+  const { error: e3 } = await supabase.from('weeks').delete().in('id', ids);
+  if (e3) throw e3;
+
+  cache.weeks.clear();
+  cache.weekMeals.clear();
+  notify('weeks');
+  notify('week_meals');
+  notify('shopping_lists');
+
+  return { deletedWeeks: weeks.length, deletedPdfs };
+}
+
+// 'Wis al mijn data' — recht op vergetelheid. Verwijdert alles van de huidige
+// auth-user. Profiles van het huishouden, hun weken, week_meals, shopping_lists,
+// shopping_notes, en alle PDFs uit storage. Soft delete-meals (zonder owner) blijven.
+export async function wipeAllUserData() {
+  // Haal alle PDFs eerst
+  const { data: weeks } = await supabase.from('weeks').select('id, pdf_path');
+  const pdfPaths = (weeks || []).filter(w => w.pdf_path).map(w => w.pdf_path);
+  if (pdfPaths.length > 0) {
+    await supabase.storage.from('dietist-pdfs').remove(pdfPaths);
+  }
+  // Cascade via profiles delete (FK on delete cascade)
+  const { data: profiles, error: e1 } = await supabase.from('profiles').select('id');
+  if (e1) throw e1;
+  if (profiles?.length) {
+    const ids = profiles.map(p => p.id);
+    const { error: e2 } = await supabase.from('profiles').delete().in('id', ids);
+    if (e2) throw e2;
+  }
+  clearCache();
+  notify('profiles');
+  notify('weeks');
+  notify('week_meals');
+  notify('shopping_lists');
+  notify('shopping_notes');
+  return { deletedProfiles: profiles?.length || 0, deletedPdfs: pdfPaths.length };
+}

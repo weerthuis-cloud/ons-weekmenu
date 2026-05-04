@@ -1,6 +1,7 @@
 // Archief v0.6: prototype-stijl mosaic preview-cards.
 import { html, nothing } from 'lit-html';
-import { listProfiles, listWeeks, countSlotsByWeek, addWeek, getWeek, duplicateWeekMeals, onDataChange } from '../lib/data.js';
+import { listProfiles, listWeeks, countSlotsByWeek, addWeek, getWeek, duplicateWeekMeals, onDataChange,
+         exportAllData, deleteWeeksOlderThan, wipeAllUserData } from '../lib/data.js';
 import { formatWeekRange, todayInfo } from '../lib/datums.js';
 import { rerender } from '../main.js';
 import { setRoute } from '../router.js';
@@ -111,6 +112,8 @@ export function LibraryView(state) {
       ${vs.error ? html`<div class="err">${vs.error}</div>` : nothing}
 
       ${showSlugs.map(slug => renderSlugSection(slug))}
+
+      ${renderMaintenancePanel()}
 
       ${vs.dup ? renderDupModal() : nothing}
     </section>
@@ -281,5 +284,99 @@ function renderDupModal() {
         </div>
       </div>
     </div>
+  `;
+}
+
+// ============================================================
+// v1.8: Onderhoud — backup-export + AVG-cleanup
+// ============================================================
+async function doDownloadBackup() {
+  vs.error = null;
+  try {
+    const data = await exportAllData();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `owm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    vs.error = 'Backup mislukt: ' + err.message;
+    rerender();
+  }
+}
+
+async function doDeleteOldWeeks() {
+  // Cutoff: 8 weken vóór huidige week
+  const t = todayInfo();
+  let cutoffWeek = t.week - 8;
+  let cutoffYear = t.year;
+  while (cutoffWeek < 1) { cutoffWeek += 52; cutoffYear -= 1; }
+  if (!confirm(`Wis alle weken ouder dan week ${cutoffWeek} van ${cutoffYear}? Maaltijden, boodschappen en PDFs van die weken worden verwijderd. Bibliotheek-meals (recepten) blijven bestaan.`)) return;
+  vs.error = null;
+  try {
+    const res = await deleteWeeksOlderThan(cutoffYear, cutoffWeek);
+    alert(`Klaar. ${res.deletedWeeks} weken verwijderd, ${res.deletedPdfs} PDFs gewist.`);
+    await loadAll();
+  } catch (err) {
+    vs.error = 'Verwijderen mislukt: ' + err.message;
+    rerender();
+  }
+}
+
+async function doWipeAll() {
+  if (!confirm('Wis ALLE data van Peter en Miranda (profielen, weken, maaltijden in weekmenu, boodschappenlijsten, PDFs)? Dit kan niet ongedaan gemaakt worden.')) return;
+  if (!confirm('Echt zeker? Type-it nogmaals: dit wist je hele history. Maak eerst een backup als je dat nog niet hebt gedaan.')) return;
+  vs.error = null;
+  try {
+    const res = await wipeAllUserData();
+    alert(`Alle data gewist. ${res.deletedProfiles} profielen, ${res.deletedPdfs} PDFs.`);
+    location.reload();
+  } catch (err) {
+    vs.error = 'Wissen mislukt: ' + err.message;
+    rerender();
+  }
+}
+
+function renderMaintenancePanel() {
+  return html`
+    <div class="maint-panel">
+      <div class="cmt">// onderhoud — backup en AVG-cleanup</div>
+      <div class="maint-row">
+        <button class="btn" @click=${doDownloadBackup}>↓ download backup (.json)</button>
+        <span class="cmt">Alle tabellen als JSON. Bewaar lokaal als veiligheidskopie.</span>
+      </div>
+      <div class="maint-row">
+        <button class="btn ghost" @click=${doDeleteOldWeeks}>wis weken ouder dan 8 weken</button>
+        <span class="cmt">Inclusief bijbehorende PDFs. Bibliotheek-meals blijven.</span>
+      </div>
+      <div class="maint-row">
+        <button class="btn ghost danger" @click=${doWipeAll}>wis al mijn data (recht op vergetelheid)</button>
+        <span class="cmt">Profielen + alles. Definitief.</span>
+      </div>
+    </div>
+    <style>
+      .maint-panel {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--r-lg);
+        padding: 16px 18px;
+        display: flex; flex-direction: column; gap: 10px;
+        margin-top: 24px;
+      }
+      .maint-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .maint-row .btn { min-width: 200px; }
+      .maint-row .cmt { font-size: 12px; color: var(--ink-3); }
+      .btn.ghost.danger { color: oklch(40% 0.14 28); border-color: oklch(85% 0.08 28); }
+      .btn.ghost.danger:hover { background: var(--tomato-tint); }
+      @media (max-width: 720px) {
+        .maint-row { flex-direction: column; align-items: stretch; }
+        .maint-row .btn { width: 100%; }
+      }
+    </style>
   `;
 }
