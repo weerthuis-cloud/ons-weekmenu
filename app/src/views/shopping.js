@@ -778,34 +778,27 @@ export function ShoppingView(state) {
       .ignore-btn:hover { opacity: 1; color: oklch(50% 0.18 28); }
       .dup-mark { font-size: 11px; color: var(--ink-3); margin-left: 4px; cursor: help; }
 
-      /* v2.0 + v2.2a: dag-filter chips in een 7-koloms grid (altijd één rij).
-         Override van de generieke .chip-styling zodat ze de cel netjes vullen
-         en een duidelijke achtergrond houden t.o.v. de pagina. */
+      /* v2.2c: dag-filter chips zien er op desktop hetzelfde uit als de
+         andere chips (pill, eigen breedte). Alleen op mobile uitgerekt in
+         een 7-koloms grid omdat ze daar anders zouden wrappen. */
       .day-filter-block { display: flex; flex-direction: column; gap: 8px; }
-      .day-chip-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 6px;
-      }
-      .day-chip {
-        display: flex; align-items: center; justify-content: center;
-        height: 36px; padding: 0; min-width: 0; width: 100%;
-        background: var(--bg);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        font-size: 12px;
-        cursor: pointer;
-        color: var(--ink-2);
-      }
-      .day-chip:hover { border-color: var(--ink); color: var(--ink); }
-      .day-chip.is-on {
-        background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 700;
-      }
+      .day-chip-grid { display: flex; gap: 6px; flex-wrap: nowrap; }
+      .day-chip { cursor: pointer; }
       .day-quick { display: flex; gap: 6px; flex-wrap: wrap; }
       .chip.small { font-size: 11px; padding: 4px 10px; }
       @media (max-width: 720px) {
-        .day-chip-grid { gap: 4px; }
-        .day-chip { height: 34px; font-size: 11px; }
+        .day-chip-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 4px;
+        }
+        .day-chip {
+          padding: 6px 0;
+          min-width: 0;
+          width: 100%;
+          text-align: center;
+          font-size: 11px;
+        }
         .chip.small { font-size: 10px; padding: 3px 8px; }
       }
       .done-head { margin-bottom: 8px; }
