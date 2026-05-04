@@ -12,6 +12,7 @@ import { aggregateShopping, groupByCategory, groupByStore, itemKey,
          approvedRecipeKeys, approvedIngredientNamesForRecipe, recipeKeyOf } from '../lib/shopping.js';
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
+import { ROUTES, ROUTE_LABELS } from '../lib/winkelroutes.js';
 import { Checkbox } from '../components/checkbox.js';
 import { rerender, state as appState, actions as appActions } from '../main.js';
 
@@ -35,6 +36,8 @@ const vs = {
   editingKey: null,     // itemKey van item dat momenteel in qty-edit mode staat
   // v1.3: per-recept UI-state (recipeKey → { expanded, excluded:Set<originalName> })
   recipes: {},
+  // v1.6: gekozen winkelroute (standaard / ah / jumbo / lidl), persistent in localStorage
+  routeStore: (typeof localStorage !== 'undefined' && localStorage.getItem('owm.routeStore')) || 'standaard',
   // Notities
   notes: [],
   noteInput: '',
@@ -438,6 +441,12 @@ async function resetAllDinerToTwo() {
   }
 }
 
+function setRouteStore(id) {
+  vs.routeStore = id;
+  try { localStorage.setItem('owm.routeStore', id); } catch (e) { /* niet kritisch */ }
+  rerender();
+}
+
 function setModus(modus) { vs.modus = modus; loadAll(); }
 function setStoreFilter(s) { vs.storeFilter = s; rerender(); }
 function changeWeek(delta) {
@@ -459,6 +468,14 @@ export function ShoppingView(state) {
   const openItems = filteredItems.filter(i => !i.checked);
   const doneItems = filteredItems.filter(i => i.checked);
   const groups = groupByCategory(openItems);
+  // v1.6: hersorteer categorie-cards op winkelroute (alleen als niet-standaard)
+  const route = ROUTES[vs.routeStore];
+  if (route) {
+    groups.sort((a, b) => {
+      const ai = route.indexOf(a.categoryId); const bi = route.indexOf(b.categoryId);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
+  }
 
   const totalCount = all.length;
   const checkedCount = all.filter(i => i.checked).length;
@@ -522,14 +539,11 @@ export function ShoppingView(state) {
 
       ${vs.error ? html`<div class="err">${vs.error}</div>` : nothing}
 
-      <div class="filter-row no-print store-filter-row" style="justify-content: flex-start;">
-        <div class="cmt" style="margin-right: 8px;">// gegroepeerd per winkel</div>
-        <button class="chip ${vs.storeFilter === 'all' ? 'is-on' : ''}" @click=${() => setStoreFilter('all')}>
-          Alle winkels (${all.length})
-        </button>
-        ${usedStores.map(s => html`
-          <button class="chip ${vs.storeFilter === s ? 'is-on' : ''}" @click=${() => setStoreFilter(s)}>
-            ${winkelLabel(s)} (${all.filter(i => i.store === s).length})
+      <div class="filter-row no-print route-row" style="justify-content: flex-start;">
+        <div class="cmt" style="margin-right: 8px;">// route</div>
+        ${Object.keys(ROUTES).map(rid => html`
+          <button class="chip ${vs.routeStore === rid ? 'is-on' : ''}" @click=${() => setRouteStore(rid)}>
+            ${ROUTE_LABELS[rid]}
           </button>
         `)}
       </div>
@@ -857,8 +871,7 @@ export function ShoppingView(state) {
         .hero-acties  { order: 102; }
         .actions-card .btn { font-size: 13px; }
 
-        /* Winkel-filter rij verbergen op mobiel — niet relevant zonder winkel-data */
-        .store-filter-row { display: none; }
+        /* Route-rij blijft zichtbaar op mobiel — handig in de winkel zelf */
       }
 
       @media print {
