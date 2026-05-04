@@ -332,8 +332,10 @@ async function generateOrRefresh() {
   }
 }
 
-async function toggleChecked(idx) {
-  const next = vs.items.map((x, i) => i === idx ? { ...x, checked: !x.checked } : x);
+async function toggleChecked(itemOrKey) {
+  // v2.0 fix: zoek op itemKey want dag-filter maakt nieuwe object-refs.
+  const key = typeof itemOrKey === 'string' ? itemOrKey : itemKey(itemOrKey);
+  const next = vs.items.map(x => itemKey(x) === key ? { ...x, checked: !x.checked } : x);
   vs.items = next;
   rerender();
   try { vs.list = await updateShoppingList({ id: vs.list.id, items: next }); }
@@ -352,7 +354,7 @@ function startEditQty(key) {
   });
 }
 
-async function commitEditQty(idx, rawValue) {
+async function commitEditQty(itemOrKey, rawValue) {
   vs.editingKey = null;
   const trimmed = (rawValue || '').trim();
   let newQty = null;
@@ -360,7 +362,8 @@ async function commitEditQty(idx, rawValue) {
     const n = Number(trimmed.replace(',', '.'));
     if (Number.isFinite(n) && n >= 0) newQty = n;
   }
-  const next = vs.items.map((x, i) => i === idx ? { ...x, qty: newQty } : x);
+  const key = typeof itemOrKey === 'string' ? itemOrKey : itemKey(itemOrKey);
+  const next = vs.items.map(x => itemKey(x) === key ? { ...x, qty: newQty } : x);
   vs.items = next;
   rerender();
   try { vs.list = await updateShoppingList({ id: vs.list.id, items: next }); }
@@ -1207,10 +1210,10 @@ function renderDoneSection(doneItems, allItems) {
       </div>
       <ul class="item-list">
         ${doneItems.map(item => {
-          const idx = allItems.indexOf(item);
+          const k = itemKey(item);
           return html`
-            <li class="item-row is-done" @click=${() => toggleChecked(idx)}>
-              ${Checkbox({ checked: true, hue: 145, onClick: () => toggleChecked(idx) })}
+            <li class="item-row is-done" @click=${() => toggleChecked(k)}>
+              ${Checkbox({ checked: true, hue: 145, onClick: () => toggleChecked(k) })}
               <div class="name-col">
                 <span class="name">${item.name}</span>
               </div>
@@ -1254,10 +1257,10 @@ function renderCategoryCard(group, allItems, nameCounts) {
           return html`
             <li class="item-row ${item.checked ? 'is-done' : ''} ${openSource ? 'is-highlighted' : ''}">
               ${openSource ? html`<span class="row-mark" style="color:${dayColor(openSource.day)};" aria-hidden="true">▸</span>` : ''}
-              <span @click=${() => toggleChecked(idx)}>
-                ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(idx) })}
+              <span @click=${() => toggleChecked(key)}>
+                ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(key) })}
               </span>
-              <div class="name-col" @click=${() => toggleChecked(idx)}>
+              <div class="name-col" @click=${() => toggleChecked(key)}>
                 <span class="name">
                   ${item.name}
                   ${(nameCounts?.get(normalizeName(item.name)) || 0) > 1 ? html`<span class="dup-mark" title="lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen">≈</span>` : ''}
@@ -1274,7 +1277,7 @@ function renderCategoryCard(group, allItems, nameCounts) {
                   type="text"
                   inputmode="decimal"
                   .value=${item.qty != null ? String(item.qty) : ''}
-                  @blur=${(e) => commitEditQty(idx, e.target.value)}
+                  @blur=${(e) => commitEditQty(key, e.target.value)}
                   @keydown=${(e) => {
                     if (e.key === 'Enter') { e.target.blur(); }
                     else if (e.key === 'Escape') { cancelEditQty(); }

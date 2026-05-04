@@ -1,2 +1,2 @@
 // Eén plek voor het versienummer. Bump bij elke release.
-export const VERSION = 'v2.0';
+export const VERSION = 'v2.0a';
