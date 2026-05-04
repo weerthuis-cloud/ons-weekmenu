@@ -215,7 +215,10 @@ function view() {
   const isDiner = ui.slot === 'diner';
   const ingredients = meal.ingredients || [];
   const hasRecipe = !!meal.recipe;
-  const hasIngredients = ingredients.length > 0;
+  // v1.5c: ingrediënten van recipe-meals (serves > 0) verbergen — die staan
+  // al in het recepten-paneel + boodschappenlijst, dubbele weergave is verwarrend.
+  const isRecipeMeal = Number(meal.serves) > 0;
+  const hasIngredients = ingredients.length > 0 && !isRecipeMeal;
 
   return html`
     <div class="md-backdrop" @click=${close}>

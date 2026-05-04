@@ -16,6 +16,8 @@ export const CATEGORIES = [
       'broccoli','bloemkool','spruitjes','sperziebonen','sperzieboon','snijbonen','boontjes',
       'asperges','radijs','rabarber','rabarber','avocado','olijven','dadel','vijgen',
       'champignons','paddenstoel','paddestoel','prei',
+      'krulpeterselie','peterselie','bieslook','aspergebroccoli','zoete aardappel','zoete aardappelen','aardappel','aardappelen',
+      'cherrytomaten','cherrytomaat','salade-ui','salade ui','boerenkool','mais','kidneybonen',
       'fruit (diepvries)','fruit','groente','groente naar keuze',
     ],
   },
@@ -24,10 +26,11 @@ export const CATEGORIES = [
     label: 'Zuivel & eieren',
     hue: 85,
     keywords: [
-      'ei','eieren','omelet',
-      'kwark','yoghurt','griekse yoghurt','skyr','hüttenkäse','hüttenkase','huttenkase',
+      'ei','eieren','omelet','roerei','gekookt ei','gebakken ei',
+      'kwark','yoghurt','griekse yoghurt','skyr','hüttenkäse','hüttenkase','huttenkase','kefir',
       'melk','halfvolle melk','volle melk','karnemelk','volle yoghurt','sojamelk','havermelk','amandelmelk',
-      'kaas','geitenkaas','feta','mozzarella','parmezaan','parmezaanse kaas','brie','camembert','cheddar',
+      'kookzuivel','zuivel',
+      'kaas','geitenkaas','feta','mozzarella','parmezaan','parmezaanse kaas','brie','camembert','cheddar','witte kaas','geraspte kaas','geraspte belegen 30+ kaas','belegen kaas',
       'roomboter','boter','margarine','room','crème fraîche','creme fraiche','zure room','slagroom','kookroom','vla',
     ],
   },
@@ -36,11 +39,11 @@ export const CATEGORIES = [
     label: 'Brood & granen',
     hue: 28,
     keywords: [
-      'brood','boterham','bolletje','bolletjes','pistolet','wrap','wraps','pita','tortilla',
+      'brood','boterham','bolletje','bolletjes','pistolet','wrap','wraps','pita','tortilla','tortillawraps','volkoren tortillawraps',
       'crackers','beschuit','knäckebröd','knackebrod','rijstwafel','rijstwafels',
       'havermout','muesli','granola','cornflakes',
-      'rijst','basmati','jasmijn','sushi rijst','sushirijst','risotto','risottorijst',
-      'pasta','spaghetti','penne','macaroni','lasagne','tagliatelle','farfalle','linzen','linzenpasta',
+      'rijst','basmatirijst','witte rijst','zilvervliesrijst','basmati','jasmijn','sushi rijst','sushirijst','risotto','risottorijst',
+      'pasta','spaghetti','penne','volkoren penne','macaroni','macaroni-spaghettigroente','lasagne','tagliatelle','farfalle','mezzelune','linzen','linzenpasta',
       'couscous','quinoa','bulgur','gerst','spelt','boekweit','meel','bloem','suiker',
     ],
   },
@@ -49,12 +52,12 @@ export const CATEGORIES = [
     label: 'Vlees & vis',
     hue: 0,
     keywords: [
-      'kip','kippendij','kippendijen','kipfilet','kipreepjes','kalkoen',
-      'rund','rundvlees','beef','biefstuk','rundergehakt','gehakt','tartaar','carpaccio',
+      'kip','kippendij','kippendijen','kipdijfilet','kipfilet','kipfiletreepjes','kipreepjes','kalkoen',
+      'rund','rundvlees','beef','biefstuk','biefstukpuntjes','rundergehakt','gehakt','tartaar','carpaccio',
       'varken','varkensvlees','speklap','kotelet','spareribs','bacon','spek',
       'lam','lamsvlees','wild','konijn',
-      'salami','ham','vegaburger','tofu','tempeh','seitan',
-      'zalm','tonijn','kabeljauw','schol','makreel','haring','garnalen','garnaal','mosselen','sardines',
+      'salami','ham','beleg','vega balletjes','vegaburger','tofu','tempeh','seitan',
+      'zalm','tonijn','tonijnstukken','kabeljauw','schol','makreel','haring','garnalen','garnaal','mosselen','sardines',
       'vis','poelevlees','vleeswaren','vleesvervanger',
     ],
   },
@@ -63,12 +66,12 @@ export const CATEGORIES = [
     label: 'Kruiden & sausen',
     hue: 60,
     keywords: [
-      'olijfolie','zonnebloemolie','sesamolie','olie','azijn','balsamico',
-      'mosterd','mayonaise','ketchup','sambal','sojasaus','vissaus','pesto',
-      'zout','peper','kruiden','peterselie','basilicum','dille','rozemarijn','tijm','oregano','laurier',
+      'olijfolie','milde olijfolie','zonnebloemolie','sesamolie','olie','azijn','balsamico',
+      'mosterd','mayonaise','ketchup','ketjap','ketjap manis','sambal','sojasaus','vissaus','pesto','verse groene pesto','picadillo','paloeloe','paloeloe smoorsaus','smoorsaus',
+      'zout','peper','kruiden','basilicum','dille','rozemarijn','tijm','oregano','laurier','chilivlokken',
       'kaneel','nootmuskaat','kerrie','kerriepoeder','komijn','paprikapoeder','kurkuma','curry',
-      'knoflookpoeder','uipoeder','suiker','vanille','vanillesuiker',
-      'bouillon','groentebouillon','kippenbouillon','runderbouillon','kokosmelk',
+      'knoflookpoeder','uipoeder','vanille','vanillesuiker',
+      'bouillon','bouillontablet','groentebouillon','kippenbouillon','kippenbouillontablet','runderbouillon','kokosmelk','kokosmelk light',
     ],
   },
   {
@@ -77,10 +80,10 @@ export const CATEGORIES = [
     hue: 50,
     keywords: [
       'honing','siroop','jam','hagelslag','pindakaas','chocoladepasta','speculoospasta',
-      'noten','noot','amandel','amandelen','walnoot','walnoten','cashew','cashewnoten','pistache','pinda','pindas',
+      'noten','noot','amandel','amandelen','walnoot','walnoten','cashew','cashewnoten','pistache','pinda','pindas','pinda\'s','pecan','pecannoot','pecannoten','kokossnippers',
       'zaden','zaad','lijnzaad','sesamzaad','chiazaad','pompoenpitten','zonnebloempitten',
       'rozijn','rozijnen','dadel','dadels','vijg gedroogd',
-      'olijven','kappertjes','augurken','zilveruitjes','tomatenblokjes','tomatenpuree',
+      'olijven','zongerijpte olijven','kappertjes','augurken','zilveruitjes','tomatenblokjes','tomatenpuree','pomodorini',
     ],
   },
   {
@@ -123,7 +126,6 @@ export function classifyIngredient(normalizedName) {
   if (KEYWORD_INDEX.has(n)) return KEYWORD_INDEX.get(n);
 
   // Probeer per woord (langste-keyword-eerst voor multi-word)
-  // Sorteer keywords aflopend per lengte zodat 'blauwe bessen' eerder matched dan 'bessen' alleen.
   const tokens = n.split(/\s+/);
   for (let len = tokens.length; len > 0; len--) {
     for (let start = 0; start <= tokens.length - len; start++) {
@@ -132,8 +134,19 @@ export function classifyIngredient(normalizedName) {
     }
   }
 
+  // Substring-fallback: lange keywords zoeken in samengestelde namen
+  // ('basmatirijst' bevat 'basmatirijst', 'kookzuivel' bevat 'kookzuivel').
+  // Sorteer keywords aflopend op lengte zodat specifiekere matches voorgaan.
+  for (const kw of KEYWORD_BY_LENGTH) {
+    if (kw.length < 4) continue;             // korte woorden geven false positives
+    if (n.includes(kw)) return KEYWORD_INDEX.get(kw);
+  }
+
   return 'overig';
 }
+
+// Keywords gesorteerd op lengte (langste eerst) voor substring-fallback.
+const KEYWORD_BY_LENGTH = [...KEYWORD_INDEX.keys()].sort((a, b) => b.length - a.length);
 
 export function categoryLabel(id) {
   return CATEGORY_BY_ID[id]?.label ?? 'Overig';
