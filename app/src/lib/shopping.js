@@ -315,12 +315,20 @@ export function groupByCategory(items) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(item);
   }
+  // v2.0c: items binnen categorie clusteren op basisnaam (eerste woord van
+  // genormaliseerde naam) zodat varianten als "Kaas" / "Kaas, geraspt" /
+  // "Kaas naar keuze" altijd naast elkaar staan, ongeacht alfabet-volgorde.
   return Array.from(groups.entries())
     .sort(([a], [b]) => categoryOrder(a) - categoryOrder(b))
     .map(([catId, items]) => ({
       categoryId: catId,
       label: categoryLabel(catId),
       hue: categoryHue(catId),
-      items,
+      items: [...items].sort((a, b) => {
+        const aBase = (normalizeName(a.name).split(' ')[0] || '');
+        const bBase = (normalizeName(b.name).split(' ')[0] || '');
+        if (aBase !== bBase) return aBase.localeCompare(bBase);
+        return a.name.localeCompare(b.name);
+      }),
     }));
 }

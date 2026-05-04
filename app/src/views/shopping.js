@@ -168,7 +168,7 @@ async function noteToList(note) {
     qty: note.qty,
     unit: note.unit || '',
     store: '',
-    category: classifyIngredient(note.name.toLowerCase()),
+    category: classifyIngredient(normalizeName(note.name || '')),
     who: [],
     partial: false,
     variants: [note.name],
@@ -243,10 +243,12 @@ async function loadAll() {
         await generateOrRefresh();
         return;
       }
-      // v1.5d: éénmalig reclassify zodat items met verouderde categorie
-      // ('Overig' van vóór de keyword-uitbreiding) nu in de juiste card komen.
+      // v1.5d / v2.0b: éénmalig reclassify met de nieuwste classifier.
+      // Belangrijk: normalizeName gebruiken zodat komma's, bereiding-keywords
+      // ("gebakken") en "naar keuze" gestript worden — anders blijft een
+      // losse token (bv. "roomboter") winnen via substring-fallback.
       const reclassified = vs.items.map(it => {
-        const newCat = classifyIngredient((it.name || '').toLowerCase().trim());
+        const newCat = classifyIngredient(normalizeName(it.name || ''));
         return newCat !== it.category ? { ...it, category: newCat } : it;
       });
       const changed = reclassified.some((it, i) => it !== vs.items[i]);
@@ -315,7 +317,7 @@ async function generateOrRefresh() {
           ...oldIt,
           sources: recipeSources,
           checked: oldIt.checked ?? false,
-          category: classifyIngredient(oldIt.name?.toLowerCase().trim()),
+          category: classifyIngredient(normalizeName(oldIt.name || '')),
         });
       }
     }
