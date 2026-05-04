@@ -9,6 +9,11 @@ export function dayColor(day) {
   return `oklch(70% 0.16 ${DAY_HUE[day] || 240})`;
 }
 
+// v2.0e: lichte tint voor marker-achtergrond (à la Word highlighter).
+export function dayColorLight(day) {
+  return `oklch(92% 0.08 ${DAY_HUE[day] || 240})`;
+}
+
 // Een recept is 'incompleet' als serves of ingredients ontbreken.
 // Gebruikt voor de waarschuwingsbadge in het recepten-paneel.
 export function isRecipeIncomplete(meal) {

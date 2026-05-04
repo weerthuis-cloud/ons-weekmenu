@@ -14,7 +14,7 @@ import { aggregateShopping, groupByCategory, groupByStore, itemKey,
 import { formatQty } from '../lib/units.js';
 import { winkelLabel, WINKELS } from '../lib/winkels.js';
 import { ROUTES, ROUTE_LABELS } from '../lib/winkelroutes.js';
-import { DAY_HUE, dayColor, isRecipeIncomplete } from '../lib/recipe-helpers.js';
+import { DAY_HUE, dayColor, dayColorLight, isRecipeIncomplete } from '../lib/recipe-helpers.js';
 import { loadIgnored, saveIgnored as saveIgnoredSet, onIgnoredChange, notifyIgnoredChange } from '../lib/ignored.js';
 import { Checkbox } from '../components/checkbox.js';
 import { rerender, state as appState, actions as appActions } from '../main.js';
@@ -809,8 +809,7 @@ export function ShoppingView(state) {
       .item-row .name-col { flex: 1 1 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; cursor: pointer; overflow: hidden; }
       .item-row .name { font-size: 14px; font-weight: 500; word-break: break-word; overflow-wrap: anywhere; }
       .item-row .who { flex-shrink: 0; }
-      .recipe-dots { display: inline-flex; gap: 3px; margin-right: 6px; vertical-align: middle; }
-      .recipe-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+      .recipe-marker { padding: 1px 4px; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
       .item-row .variant-hint { font-size: 10px; color: var(--ink-3); font-style: italic; }
       .item-row .qty { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
 
@@ -1264,14 +1263,27 @@ function renderCategoryCard(group, allItems, nameCounts) {
                 ${Checkbox({ checked: item.checked, hue: group.hue, onClick: () => toggleChecked(key) })}
               </span>
               <div class="name-col" @click=${() => toggleChecked(key)}>
-                <span class="name">
-                  ${(() => {
-                    const days = recipeDaysFor(item);
-                    return days.length > 0 ? html`<span class="recipe-dots">${days.map(d => html`<span class="recipe-dot" style="background:${dayColor(d)};" title="${DAGEN_KORT[d-1] || ('d'+d)}"></span>`)}</span>` : '';
-                  })()}
-                  ${item.name}
-                  ${(nameCounts?.get(normalizeName(item.name)) || 0) > 1 ? html`<span class="dup-mark" title="lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen">≈</span>` : ''}
-                </span>
+                ${(() => {
+                  const days = recipeDaysFor(item);
+                  if (days.length === 0) return html`
+                    <span class="name">
+                      ${item.name}
+                      ${(nameCounts?.get(normalizeName(item.name)) || 0) > 1 ? html`<span class="dup-mark" title="lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen">≈</span>` : ''}
+                    </span>
+                  `;
+                  // v2.0e: marker (Word-stijl highlighter) achtergrond in dag-kleur.
+                  // Bij meerdere dagen: linear-gradient over alle dag-kleuren.
+                  const bg = days.length === 1
+                    ? dayColorLight(days[0])
+                    : `linear-gradient(90deg, ${days.map(d => dayColorLight(d)).join(', ')})`;
+                  const title = days.map(d => DAGEN_KORT[d - 1] || ('d' + d)).join(' + ');
+                  return html`
+                    <span class="name">
+                      <span class="recipe-marker" style="background:${bg};" title="uit recept van ${title}">${item.name}</span>
+                      ${(nameCounts?.get(normalizeName(item.name)) || 0) > 1 ? html`<span class="dup-mark" title="lijkt op een ander item — pas de naam aan via Maker als je ze wilt samenvoegen">≈</span>` : ''}
+                    </span>
+                  `;
+                })()}
                 ${variantHint ? html`<span class="variant-hint">${variantHint}</span>` : ''}
               </div>
               <span class="who">
