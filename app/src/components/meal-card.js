@@ -5,7 +5,7 @@ import { hueForSlot, chipForSlot, SLOT_VISUAL } from '../lib/cat.js';
 
 const HEIGHTS = { sm: 78, md: 104, lg: 160 };
 
-export function MealCard({ meal, size = 'md', onClick = null, showMacros = false, badge = null }) {
+export function MealCard({ meal, size = 'md', onClick = null, showMacros = false, badge = null, onToggleFavoriet = null }) {
   if (!meal) return null;
   const hue = hueForSlot(meal.type) ?? 80;
   const chip = chipForSlot(meal.type);
@@ -23,6 +23,13 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
       <div class="mc-img">
         ${FoodPh({ hue, label: `// ${namePreview}`, height: HEIGHTS[size] })}
         ${badge ? html`<span class="mc-badge">${badge}</span>` : nothing}
+        ${onToggleFavoriet ? html`
+          <span class="mc-fav ${meal.favoriet ? 'is-on' : ''}"
+            title=${meal.favoriet ? 'Favoriet — klik om te verwijderen' : 'Markeer als favoriet'}
+            @click=${(e) => { e.stopPropagation(); onToggleFavoriet(meal); }}>
+            ${meal.favoriet ? '★' : '☆'}
+          </span>
+        ` : nothing}
       </div>
       <div class="mc-meta">
         <span class="chip ${chip}">${slotLabel}</span>
@@ -57,6 +64,16 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
         font-size: 10px; font-weight: 700;
         padding: 3px 7px; border-radius: 999px;
       }
+      .mc-fav {
+        position: absolute; top: 6px; left: 8px;
+        font-size: 18px; line-height: 1;
+        cursor: pointer; user-select: none;
+        color: oklch(70% 0.04 60);
+        text-shadow: 0 1px 2px oklch(0% 0 0 / 0.3);
+        transition: color .15s ease, transform .15s ease;
+      }
+      .mc-fav:hover { transform: scale(1.2); color: oklch(75% 0.18 70); }
+      .mc-fav.is-on { color: oklch(72% 0.16 70); }
       .mc-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
       .mc-meta .chip { height: 20px; font-size: 11px; padding: 0 8px; }
       .mc-name { margin-top: 4px; font-weight: 600; line-height: 1.25; color: var(--ink); }

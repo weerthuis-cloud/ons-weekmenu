@@ -4,7 +4,7 @@
 // Route blijft 'maker' (deeplinks/shopping.js verwijzen ernaar). Nav-label = 'Bibliotheek'.
 
 import { html, nothing } from 'lit-html';
-import { listMeals, onDataChange } from '../lib/data.js';
+import { listMeals, listMealRatings, setMealFavoriet, onDataChange } from '../lib/data.js';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { openMealEditor, openMealCreator } from '../components/meal-picker.js';
 import { MealCard } from '../components/meal-card.js';
@@ -67,6 +67,7 @@ const vs = {
   loading: false,
   error: null,
   meals: [],
+  ratings: {},              // { meal_id: { count, avg } }
   // Filters
   q: '',
   type: '',                 // slot
@@ -80,8 +81,10 @@ const vs = {
   kcalMaxOn: false,
   seizoen: '',
   tag: '',
-  // Sortering
+  favorietOnly: false,      // v2.6: alleen favorieten
+  // Sortering + view-mode
   sortBy: 'name',
+  viewMode: 'grid',         // 'grid' | 'lijst'
   initialized: false,
 };
 
@@ -94,9 +97,24 @@ function ensureInit() {
 
 async function loadAll() {
   vs.loading = true; vs.error = null; rerender();
-  try { vs.meals = await listMeals(); }
-  catch (err) { vs.error = err.message; }
+  try {
+    const [meals, ratings] = await Promise.all([listMeals(), listMealRatings()]);
+    vs.meals = meals;
+    vs.ratings = {};
+    for (const r of ratings) vs.ratings[r.meal_id] = { count: r.rating_count, avg: r.rating_avg };
+  } catch (err) { vs.error = err.message; }
   finally { vs.loading = false; rerender(); }
+}
+
+async function toggleFavoriet(meal) {
+  try {
+    await setMealFavoriet(meal.id, !meal.favoriet);
+    // Optimistic UI: lokaal toggelen zodat re-render meteen klopt
+    meal.favoriet = !meal.favoriet;
+    rerender();
+  } catch (err) {
+    alert('Favoriet opslaan mislukt: ' + err.message);
+  }
 }
 
 // Helper: 'bron' van een meal afleiden.
@@ -109,9 +127,8 @@ function bronOf(m) {
 }
 
 function ratingOf(m) {
-  // Recipe-rating zit op week_meals, niet op meals. Voor sortering hier: er is nog geen
-  // aggregate-rating per meal. Placeholder: 0 (later: SQL-aggregaat ophalen).
-  return 0;
+  const r = vs.ratings[m.id];
+  return r?.avg ?? 0;
 }
 
 function bucketMatches(bucketId, b) {
@@ -145,6 +162,7 @@ function applyFiltersExcept(except) {
     if (except !== 'kcal' && vs.kcalMaxOn && (m.kcal == null || m.kcal > vs.kcalMax)) return false;
     if (except !== 'seizoen' && vs.seizoen && !(m.seizoen || []).includes(vs.seizoen)) return false;
     if (except !== 'tag' && vs.tag && !(m.tags || []).includes(vs.tag)) return false;
+    if (except !== 'favoriet' && vs.favorietOnly && !m.favoriet) return false;
     return true;
   });
 }
@@ -194,13 +212,14 @@ function clearFilters() {
   vs.q = ''; vs.type = ''; vs.cuisine = ''; vs.kookwijze = new Set();
   vs.hoofd = ''; vs.dieet = new Set(); vs.bron = ''; vs.kooktijdBucket = '';
   vs.kcalMax = 900; vs.kcalMaxOn = false; vs.seizoen = ''; vs.tag = '';
+  vs.favorietOnly = false;
   rerender();
 }
 
 function hasFilters() {
   return vs.q || vs.type || vs.cuisine || vs.kookwijze.size || vs.hoofd ||
          vs.dieet.size || vs.bron || vs.kooktijdBucket || vs.kcalMaxOn ||
-         vs.seizoen || vs.tag;
+         vs.seizoen || vs.tag || vs.favorietOnly;
 }
 
 function toggleSet(set, val) {
@@ -243,6 +262,10 @@ export function BuildView(state) {
           <h1 class="display">Bibliotheek.</h1>
         </div>
         <div class="head-actions">
+          <div class="view-toggle">
+            <button class="vt ${vs.viewMode === 'grid' ? 'is-on' : ''}" @click=${() => { vs.viewMode = 'grid'; rerender(); }} title="Grid-weergave">⊞</button>
+            <button class="vt ${vs.viewMode === 'lijst' ? 'is-on' : ''}" @click=${() => { vs.viewMode = 'lijst'; rerender(); }} title="Lijst-weergave">≡</button>
+          </div>
           <select class="sort-select" .value=${vs.sortBy} @change=${(e) => { vs.sortBy = e.target.value; rerender(); }}>
             ${SORTEERS.map(([id, label]) => html`<option value=${id} ?selected=${vs.sortBy === id}>${label}</option>`)}
           </select>
@@ -256,6 +279,14 @@ export function BuildView(state) {
             <div class="cmt">// zoek</div>
             <input type="search" class="search" placeholder="naam of ingrediënt…"
               .value=${vs.q} @input=${(e) => { vs.q = e.target.value; rerender(); }} />
+          </div>
+
+          <div class="rail-section">
+            <button class="chip ${vs.favorietOnly ? 'is-on' : ''}"
+              @click=${() => { vs.favorietOnly = !vs.favorietOnly; rerender(); }}>
+              ★ Alleen favorieten
+              <span class="count">${vs.meals.filter(m => m.favoriet).length}</span>
+            </button>
           </div>
 
           <div class="rail-section">
@@ -397,6 +428,24 @@ export function BuildView(state) {
                 ? html`<p>Bibliotheek is leeg. Klik <strong>+ recept</strong> bovenin.</p>`
                 : html`<p>Geen recepten voldoen aan de filters.</p>`}
             </div>
+          ` : (vs.viewMode === 'lijst' ? html`
+            <div class="meal-list">
+              ${list.map(m => {
+                const r = vs.ratings[m.id];
+                return html`
+                  <button class="ml-row" @click=${() => openMealEditor({ meal: m, onSaved: () => loadAll() })}>
+                    <span class="ml-fav ${m.favoriet ? 'is-on' : ''}" @click=${(e) => { e.stopPropagation(); toggleFavoriet(m); }}>${m.favoriet ? '★' : '☆'}</span>
+                    <span class="ml-name">${m.name}</span>
+                    <span class="ml-meta">
+                      ${m.cuisine ? html`<span class="cmt">${m.cuisine}</span>` : ''}
+                      ${m.bereidingstijd ? html`<span class="cmt">${m.bereidingstijd}m</span>` : ''}
+                      ${m.kcal ? html`<span class="cmt">${m.kcal}k</span>` : ''}
+                      ${r?.count ? html`<span class="cmt">★${Number(r.avg).toFixed(1)}</span>` : ''}
+                    </span>
+                  </button>
+                `;
+              })}
+            </div>
           ` : html`
             <div class="meal-grid">
               ${list.map(m => MealCard({
@@ -404,9 +453,10 @@ export function BuildView(state) {
                 size: 'md',
                 showMacros: true,
                 onClick: () => openMealEditor({ meal: m, onSaved: () => loadAll() }),
+                onToggleFavoriet: toggleFavoriet,
               }))}
             </div>
-          `}
+          `)}
         </div>
       </div>
     </section>
@@ -478,6 +528,25 @@ export function BuildView(state) {
       .meal-grid {
         display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;
       }
+
+      .view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line-2); border-radius: var(--r-md); overflow: hidden; }
+      .vt { background: var(--bg); color: var(--ink-2); border: none; padding: 6px 12px; font: inherit; font-size: 16px; cursor: pointer; }
+      .vt.is-on { background: var(--ink); color: var(--bg); }
+      .vt:not(.is-on):hover { background: var(--bg-2); }
+
+      .meal-list { display: flex; flex-direction: column; gap: 4px; }
+      .ml-row {
+        display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center;
+        padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line);
+        background: var(--bg); cursor: pointer; font: inherit; text-align: left; color: var(--ink);
+      }
+      .ml-row:hover { background: var(--bg-2); border-color: var(--ink-2); }
+      .ml-fav { font-size: 16px; line-height: 1; cursor: pointer; color: oklch(70% 0.04 60); }
+      .ml-fav.is-on { color: oklch(72% 0.16 70); }
+      .ml-fav:hover { transform: scale(1.15); }
+      .ml-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ml-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .ml-meta .cmt { font-size: 11px; }
 
       @media (max-width: 960px) {
         .lv-grid { grid-template-columns: 1fr; }

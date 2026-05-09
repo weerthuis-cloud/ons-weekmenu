@@ -621,6 +621,52 @@ Totaal 66 tests groen.
 
 ---
 
+## 2026-05-09 — v2.6: macro-targets + favorieten + grid/lijst + rating-aggregaat
+
+**Aanleiding.** Peter wil weekmenu-samenstelling op basis van macronutriënten. Realiteitscheck: macro-coverage was 0% na de bulk-import. Re-scrape via schema.org/Recipe.nutrition gaf 64/464 (14%). Te laag voor auto-genereer-week, maar wel genoeg om de UI-structuur te bouwen zodat handmatig invullen waarde heeft.
+
+**Macro-coverage per bron na re-scrape:**
+- Miljuschka 33/233 (14%) — alleen recente recepten met nutrition-block
+- AH 31/132 (23%) — degelijke nutrition-data waar aanwezig
+- 24kitchen 0/53 — geen nutrition op site
+- Diëtist 0/46 — alleen kcal in PDFs, niet doorgekomen via JSON-import
+
+**Schema (`v2_6_macro_targets_and_favoriet`).**
+- `profiles.kcal_doel + eiwit_g_doel + koolh_g_doel + vet_g_doel` — nullable, doelwaarden per dag.
+- `meals.favoriet boolean default false` — markering voor favorieten-filter.
+- View `meal_ratings` (meal_id, rating_count, rating_avg) — aggregeert week_meals.rating per meal voor de Bibliotheek-sortering.
+- Indexen op favoriet (partial where=true) en bestaande indexen behouden.
+
+**Edge functions tijdelijk gedeployed.**
+- `update-meal-macros` (POST `{updates: [{source_url, kcal, eiwit_g, koolh_g, vet_g}]}` met x-import-secret).
+- `list-source-urls` (GET `?site=miljuschka.nl`) — service-role wrapper voor lijst-ophalen vanuit browser, was nodig omdat anon-key geen RLS-leesrecht heeft op meals.
+Beide blijven actief tot we ze handmatig disablen of vervangen door betere oplossing.
+
+**WeekView: per-dag macro-overzicht.**
+Onder elke dag-kolom verschijnt een `.day-macros`-blok met 4 cellen: kcal, eiwit, koolh, vet. Toont totaal vs target per profiel; bij meerdere profielen ('beiden') 2 rijen. Kleur-coding: `low` (≤80% van target, geel), `ok` (80-110%, groen), `high` (>110%, rood). Fallback `—` als data ontbreekt. Schaalt op recipe-meals via `wm.porties / meal.serves`.
+
+**Settings-modal (`components/settings.js`).**
+Tandwiel-knop in topbar (naast avatar-uitloggen). Modal toont per profiel een fieldset met 4 number-inputs voor de doelwaarden. Save → updateProfileMacros voor elk gewijzigd profiel.
+
+**Bibliotheek-uitbreidingen (`views/build.js`).**
+- Favorieten-filter chip 'Alleen favorieten' direct onder zoek.
+- Ster-icoon op `MealCard` (event.stopPropagation zodat click niet doorgaat naar editor). Optimistic UI op toggle.
+- Grid/lijst toggle rechtsboven (icoon-buttons ⊞/≡). Lijst-modus = compacte rij met naam + cuisine + kooktijd + kcal + rating.
+- Sortering 'Beoordeling' werkt nu via `vs.ratings`-cache uit `listMealRatings()` en `meal_ratings`-view.
+- `loadAll()` doet `Promise.all([listMeals, listMealRatings])`.
+
+**Nav-labels.**
+'Stel zelf samen' werd al 'Bibliotheek' in v2.4 (op route 'maker'). De oude 'Bibliotheek'-label op route 'archief' is hernoemd naar 'Archief' om dubbele namen te voorkomen.
+
+**Open punten voor v2.7.**
+- Auto-genereer-week op macros — te complex bij 14% coverage.
+- Macro-coverage opkrikken via NEVO/USDA ingredient-database (groot werk).
+- Multi-select & bulk-acties in Bibliotheek (meerdere recepten in één keer naar week).
+- 'Wat kan ik vandaag maken' — match op shopping-list checked-items.
+- Favorieten-sortering ('favorites first').
+
+---
+
 ## 2026-05-09 — v2.5: mobile vandaag-scroll + diëtist-bron + cuisine-detectie via ingrediënten
 
 **Aanleiding.** Drie kleinere verbeteringen direct na v2.4: (1) mobiel weekmenu scrolt nu automatisch naar de huidige dag, (2) diëtist-recepten staan nu correct als bron 'diëtist' in de Bibliotheek-filter, (3) cuisine-coverage opgekrikt door ingrediënt-detectie.

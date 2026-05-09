@@ -402,6 +402,33 @@ export function WeekView(state) {
         .hero-main .lead { font-size: 12px; line-height: 1.4; max-width: none; margin-top: 6px; }
         .hero-main .chip-row { display: none; }
       }
+      .day-macros {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--line);
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .macros-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+      .macros-row .person-mini { font-family: var(--mono); font-size: 9px; color: var(--ink-3); width: 10px; }
+      .macro-cell {
+        flex: 1; min-width: 38px;
+        display: flex; flex-direction: column; gap: 1px;
+        padding: 3px 4px; border-radius: 4px;
+        background: var(--bg-2); border: 1px solid var(--line);
+      }
+      .macro-cell .cmt { font-size: 9px; line-height: 1; }
+      .macro-cell .val { font-size: 11px; font-weight: 600; line-height: 1.2; font-family: var(--mono); }
+      .macro-cell.low  { background: oklch(95% 0.04 50);  border-color: oklch(80% 0.10 50); }
+      .macro-cell.ok   { background: oklch(95% 0.04 145); border-color: oklch(75% 0.12 145); }
+      .macro-cell.high { background: oklch(95% 0.05 28);  border-color: oklch(75% 0.13 28); }
+      .day-col.today .macro-cell {
+        background: oklch(28% 0.02 60); border-color: oklch(35% 0.02 60); color: var(--bg);
+      }
+      .day-col.today .macro-cell.low  { background: oklch(35% 0.06 50);  border-color: oklch(45% 0.10 50); }
+      .day-col.today .macro-cell.ok   { background: oklch(35% 0.06 145); border-color: oklch(45% 0.10 145); }
+      .day-col.today .macro-cell.high { background: oklch(35% 0.08 28);  border-color: oklch(45% 0.12 28); }
+      .day-col.today .day-macros { border-top-color: oklch(40% 0.02 60); }
+
       .day-full { display: inline; }
       .day-short { display: none; }
       @media (max-width: 720px) {
@@ -486,7 +513,7 @@ function renderDayColumn(day, date, today, isCurrentWeek, persoon) {
   const isToday = isCurrentWeek && day === today.day;
   const slots = visibleSlots(persoon);
   return html`
-    <div class="day-col ${isToday ? 'today' : ''}">
+    <div class="day-col ${isToday ? 'today' : ''}" data-today=${isToday ? 'true' : 'false'}>
       <div class="day-head">
         <div class="display"><span class="day-full">${DAGEN[day - 1]}</span><span class="day-short">${DAGEN_KORT[day - 1]}</span></div>
         <div class="cmt">${date.getUTCDate()}/${date.getUTCMonth() + 1}</div>
@@ -494,8 +521,49 @@ function renderDayColumn(day, date, today, isCurrentWeek, persoon) {
       <div class="slots">
         ${slots.map(slot => renderSlotCell(day, slot, persoon))}
       </div>
+      ${renderDayMacros(day, persoon)}
     </div>
   `;
+}
+
+// v2.6: per-dag macro-overzicht onderaan de dagkolom.
+// Toont totalen vs target met kleur-coding. Toont '—' als geen data beschikbaar.
+function renderDayMacros(day, persoon) {
+  const owners = persoon === 'beiden' ? ['peter', 'miranda'] : [persoon];
+  // Aggregate macros per owner, dan tonen we de focused owner (of beide separately).
+  const rows = owners.map(slug => {
+    const profile = vs.profiles?.[slug];
+    if (!profile) return null;
+    const totalen = { kcal: 0, eiwit: 0, koolh: 0, vet: 0, complete: 0, partial: 0 };
+    const meals = (vs.meals[slug] || []).filter(wm => wm.day === day && wm.meal);
+    for (const wm of meals) {
+      const m = wm.meal;
+      const factor = (Number(m.serves) > 0) ? (Number(wm.porties || 1) / Number(m.serves)) : Number(wm.porties || 1);
+      if (m.kcal) { totalen.kcal += m.kcal * factor; totalen.complete++; }
+      if (m.eiwit_g) totalen.eiwit += Number(m.eiwit_g) * factor;
+      if (m.koolh_g) totalen.koolh += Number(m.koolh_g) * factor;
+      if (m.vet_g)   totalen.vet   += Number(m.vet_g)   * factor;
+      if (!m.kcal && (m.eiwit_g || m.koolh_g || m.vet_g)) totalen.partial++;
+    }
+    if (meals.length === 0) return null;
+    const macroRow = (label, val, target) => {
+      if (!target) return html`<div class="macro-cell"><span class="cmt">${label}</span><span class="val">${val ? Math.round(val) : '—'}</span></div>`;
+      const pct = val ? Math.min(100, (val / target) * 100) : 0;
+      const status = val < target * 0.8 ? 'low' : (val > target * 1.1 ? 'high' : 'ok');
+      return html`<div class="macro-cell ${status}"><span class="cmt">${label}</span><span class="val">${val ? Math.round(val) : '—'}<span class="cmt">/${target}</span></span></div>`;
+    };
+    return html`
+      <div class="macros-row">
+        ${owners.length > 1 ? html`<span class="cmt person-mini">${slug[0].toUpperCase()}</span>` : ''}
+        ${macroRow('kcal', totalen.kcal, profile.kcal_doel)}
+        ${macroRow('e', totalen.eiwit, profile.eiwit_g_doel)}
+        ${macroRow('k', totalen.koolh, profile.koolh_g_doel)}
+        ${macroRow('v', totalen.vet, profile.vet_g_doel)}
+      </div>
+    `;
+  }).filter(Boolean);
+  if (rows.length === 0) return '';
+  return html`<div class="day-macros">${rows}</div>`;
 }
 
 function renderSlotCell(day, slot, persoon) {

@@ -35,10 +35,49 @@ export async function listProfiles() {
   if (cache.profilesBySlug) return cache.profilesBySlug;
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, slug, naam, kleur_hue');
+    .select('id, slug, naam, kleur_hue, kcal_doel, eiwit_g_doel, koolh_g_doel, vet_g_doel');
   if (error) throw error;
   cache.profilesBySlug = Object.fromEntries((data || []).map(p => [p.slug, p]));
   return cache.profilesBySlug;
+}
+
+// v2.6: macro-targets per profiel updaten.
+export async function updateProfileMacros(profileId, { kcal_doel, eiwit_g_doel, koolh_g_doel, vet_g_doel }) {
+  const patch = {};
+  if (kcal_doel !== undefined) patch.kcal_doel = kcal_doel;
+  if (eiwit_g_doel !== undefined) patch.eiwit_g_doel = eiwit_g_doel;
+  if (koolh_g_doel !== undefined) patch.koolh_g_doel = koolh_g_doel;
+  if (vet_g_doel !== undefined) patch.vet_g_doel = vet_g_doel;
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(patch)
+    .eq('id', profileId)
+    .select()
+    .single();
+  if (error) throw error;
+  cache.profilesBySlug = null;
+  notify('profiles');
+  return data;
+}
+
+// v2.6: favoriet-vlag toggelen op een meal.
+export async function setMealFavoriet(id, favoriet) {
+  const { error } = await supabase
+    .from('meals')
+    .update({ favoriet })
+    .eq('id', id);
+  if (error) throw error;
+  cache.meals = null;
+  notify('meals');
+}
+
+// v2.6: rating-aggregaten per meal ophalen (uit view meal_ratings).
+export async function listMealRatings() {
+  const { data, error } = await supabase
+    .from('meal_ratings')
+    .select('meal_id, rating_count, rating_avg');
+  if (error) throw error;
+  return data || [];
 }
 
 // ============================================================

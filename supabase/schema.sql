@@ -6,11 +6,15 @@
 -- 1. profiles  (twee rijen: peter, miranda)
 -- ============================================================
 create table if not exists public.profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
-  slug        text unique not null check (slug in ('peter', 'miranda')),
-  naam        text not null,
-  kleur_hue   int  not null default 260,
-  created_at  timestamptz not null default now()
+  id            uuid primary key references auth.users(id) on delete cascade,
+  slug          text unique not null check (slug in ('peter', 'miranda')),
+  naam          text not null,
+  kleur_hue     int  not null default 260,
+  kcal_doel     int,                  -- v2.6: macro-target per dag
+  eiwit_g_doel  numeric(5,1),
+  koolh_g_doel  numeric(5,1),
+  vet_g_doel    numeric(5,1),
+  created_at    timestamptz not null default now()
 );
 
 -- ============================================================
@@ -38,6 +42,7 @@ create table if not exists public.meals (
   kookwijze       text[] not null default '{}', -- v2.4: oven/airfryer/eenpans/traybake/wok/soep/salade/grill/pasta/stamppot/slowcooker/smoothie
   hoofdingredient text,                       -- v2.4: kip/rund/varken/lam/vis/vegetarisch/pasta/rijst/aardappel/brood/ei/zuivel
   dieet           text[] not null default '{}', -- v2.4: vegetarisch/vegan/glutenvrij/lactosevrij/koolhydraatarm
+  favoriet        boolean not null default false, -- v2.6: gemarkeerd als favoriet in bibliotheek
   created_by      uuid references public.profiles(id),
   created_at      timestamptz not null default now(),
   deleted_at      timestamptz null   -- soft-delete: blijft in oude weken zichtbaar, weg uit bibliotheek
@@ -53,6 +58,17 @@ create index if not exists meals_cuisine_idx         on public.meals (cuisine) w
 create index if not exists meals_kookwijze_idx       on public.meals using gin (kookwijze);
 create index if not exists meals_hoofdingredient_idx on public.meals (hoofdingredient) where hoofdingredient is not null;
 create index if not exists meals_dieet_idx           on public.meals using gin (dieet);
+create index if not exists meals_favoriet_idx        on public.meals (favoriet) where favoriet = true;
+
+-- v2.6: view voor rating-aggregaten per meal (voor sortering 'Beoordeling' in Bibliotheek).
+create or replace view public.meal_ratings as
+select m.id as meal_id,
+       count(wm.rating) filter (where wm.rating is not null) as rating_count,
+       avg(wm.rating)   filter (where wm.rating is not null) as rating_avg
+from public.meals m
+left join public.week_meals wm on wm.meal_id = m.id
+group by m.id;
+grant select on public.meal_ratings to authenticated;
 
 -- ============================================================
 -- 3. weeks  (één per persoon per week)

@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.5** (Bibliotheek-database met filters, plus mobile auto-scroll naar 'vandaag' in weekmenu, diëtist-bron correct gemarkeerd, cuisine-coverage van 38% naar 67% via ingrediënt-detectie).
+Huidige versie: **v2.6** (macro-targets per profiel, daily macro-overzicht in weekmenu, favorieten + grid/lijst-toggle in Bibliotheek, werkende rating-sortering, settings-modal).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -31,6 +31,7 @@ Versies in volgorde:
 - v2.3a UI-cleanup in 'Stel zelf samen': geen voor-wie-filter meer, geen winkel-dropdown in ingredient-editor — klaar
 - v2.4 Bibliotheek (hernaamd uit Stel zelf samen): database-view met keuken-, kooktijd-, hoofdingrediënt-, kookwijze-, dieet-, bron-filter, sorteer-dropdown en counts per chip — klaar
 - v2.5 Mobile auto-scroll naar 'vandaag' in weekmenu, diëtist-bron via JOIN gemarkeerd, cuisine-coverage 38%→67% via ingrediënt-detectie — klaar
+- v2.6 Macro-targets + daily-overzicht in weekmenu, favorieten + grid/lijst toggle in Bibliotheek, rating-aggregaat per meal voor sortering, settings-modal — klaar
 
 ## Architectuur
 

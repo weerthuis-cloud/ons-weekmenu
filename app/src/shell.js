@@ -10,6 +10,7 @@ import { ShoppingView } from './views/shopping.js';
 import { LibraryView }  from './views/library.js';
 import { BuildView }    from './views/build.js';
 import { ImportView }   from './views/import.js';
+import { openSettings } from './components/settings.js';
 
 // v1.4: install horizontale swipe-navigatie eenmalig na eerste render.
 // We doen dit lazy via een MutationObserver op #app zodat we wachten tot
@@ -40,8 +41,8 @@ const NAV_ITEMS = [
   { id: 'week',    label: 'Week',         mobileShow: true  },
   { id: 'dag',     label: 'Vandaag',      mobileShow: true  },
   { id: 'lijst',   label: 'Boodschappen', mobileShow: true  },
-  { id: 'archief', label: 'Bibliotheek',  mobileShow: false },
-  { id: 'maker',   label: 'Stel zelf samen', mobileShow: false },
+  { id: 'archief', label: 'Archief',     mobileShow: false },
+  { id: 'maker',   label: 'Bibliotheek', mobileShow: false },
   { id: 'import',  label: 'Import',       mobileShow: false },
 ];
 
@@ -88,6 +89,7 @@ export function Shell(state, actions) {
             >${p.label}</button>
           `)}
         </div>
+        <button class="settings-btn" @click=${openSettings} title="Instellingen" aria-label="Instellingen">⚙</button>
         <button class="avatar" @click=${actions.signOut} title="Uitloggen">${initials}</button>
       </div>
     </header>
@@ -155,6 +157,19 @@ export function Shell(state, actions) {
         transition: transform .12s ease;
       }
       .avatar:hover { transform: scale(1.05); }
+
+      .settings-btn {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background: var(--bg-2);
+        color: var(--ink);
+        font-size: 18px;
+        border: 1px solid var(--line);
+        cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: transform .12s ease;
+      }
+      .settings-btn:hover { transform: scale(1.05); border-color: var(--ink); }
 
       .content { flex: 1; }
 
