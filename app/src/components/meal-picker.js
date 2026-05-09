@@ -16,6 +16,11 @@ function mealToDraft(meal, fallbackSlot = '') {
     name: meal?.name ?? '',
     kcal: meal?.kcal ?? '',
     type: meal?.type ?? fallbackSlot,
+    bereidingstijd: meal?.bereidingstijd ?? '',
+    cuisine: meal?.cuisine ?? '',
+    hoofdingredient: meal?.hoofdingredient ?? '',
+    kookwijze: meal?.kookwijze?.length ? [...meal.kookwijze] : [],
+    dieet: meal?.dieet?.length ? [...meal.dieet] : [],
     suitable_for: meal?.suitable_for?.length ? [...meal.suitable_for] : ['beiden'],
     ingredients: (meal?.ingredients?.length ? meal.ingredients : [null]).map(i => ({
       name: i?.name ?? '',
@@ -26,6 +31,12 @@ function mealToDraft(meal, fallbackSlot = '') {
     })),
   };
 }
+
+// Vaste lijsten voor de meta-velden (gespiegeld aan views/build.js).
+const PICKER_CUISINES = ['', 'italiaans', 'mexicaans', 'aziatisch', 'indiaas', 'frans', 'hollands', 'mediterraan', 'amerikaans', 'bbq'];
+const PICKER_HOOFD    = ['', 'kip', 'rund', 'varken', 'lam', 'vis', 'vegetarisch', 'pasta', 'rijst', 'aardappel', 'brood', 'ei', 'zuivel'];
+const PICKER_KOOKWIJZE= ['oven', 'airfryer', 'eenpans', 'traybake', 'wok', 'soep', 'salade', 'grill', 'pasta', 'stamppot', 'slowcooker', 'smoothie'];
+const PICKER_DIEET    = ['vegetarisch', 'vegan', 'glutenvrij', 'lactosevrij', 'koolhydraatarm'];
 
 const HOST_ID = '__meal_picker_host';
 
@@ -41,7 +52,7 @@ const ui = {
   busy: false,
   error: null,
   // draft-data voor 'create' en 'edit'
-  draft: { name: '', kcal: '', type: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] },
+  draft: { name: '', kcal: '', type: '', bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], suitable_for: ['beiden'], ingredients: [emptyIngredient()] },
 };
 
 function ensureHost() {
@@ -68,7 +79,7 @@ export async function openMealPicker({ slot, suggestedSuitableFor = 'beiden', on
   ui.error = null;
   ui.onPick = onPick;
   ui.onSaved = null;
-  ui.draft = { name: '', kcal: '', type: slot, suitable_for: [suggestedSuitableFor], ingredients: [emptyIngredient()] };
+  ui.draft = { name: '', kcal: '', type: slot, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], suitable_for: [suggestedSuitableFor], ingredients: [emptyIngredient()] };
   ui.meals = [];
   rerender();
   try {
@@ -101,7 +112,7 @@ export function openMealCreator({ defaultType = 'ontbijt', onSaved } = {}) {
   ui.onSaved = onSaved;
   // Wanneer onPick null is en mode='create', behandel save als 'add then close+notify'
   ui.onPick = onSaved ? ((meal) => onSaved(meal)) : null;
-  ui.draft = { name: '', kcal: '', type: defaultType, suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
+  ui.draft = { name: '', kcal: '', type: defaultType, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
   rerender();
 }
 
@@ -125,6 +136,11 @@ async function saveDraft(e) {
       name: ui.draft.name.trim(),
       type: ui.draft.type,
       kcal: ui.draft.kcal ? parseInt(ui.draft.kcal, 10) : null,
+      bereidingstijd: ui.draft.bereidingstijd ? parseInt(ui.draft.bereidingstijd, 10) : null,
+      cuisine: ui.draft.cuisine || null,
+      hoofdingredient: ui.draft.hoofdingredient || null,
+      kookwijze: ui.draft.kookwijze || [],
+      dieet: ui.draft.dieet || [],
       ingredients: ui.draft.ingredients
         .filter(ing => ing.name.trim())
         .map(ing => ({
@@ -242,6 +258,36 @@ function view() {
             </label>
             <div class="row">
               <label>
+                Type
+                <select .value=${ui.draft.type} @change=${(e) => { ui.draft.type = e.target.value; }}>
+                  ${SLOTS.map(s => html`<option value=${s.id} ?selected=${s.id === ui.draft.type}>${s.label} (${s.id})</option>`)}
+                </select>
+              </label>
+              <label>
+                Kooktijd (min)
+                <input
+                  type="number" min="0" step="5"
+                  .value=${ui.draft.bereidingstijd}
+                  @input=${(e) => { ui.draft.bereidingstijd = e.target.value; }}
+                />
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Keuken
+                <select .value=${ui.draft.cuisine} @change=${(e) => { ui.draft.cuisine = e.target.value; }}>
+                  ${PICKER_CUISINES.map(c => html`<option value=${c} ?selected=${c === ui.draft.cuisine}>${c || '— geen —'}</option>`)}
+                </select>
+              </label>
+              <label>
+                Hoofdingrediënt
+                <select .value=${ui.draft.hoofdingredient} @change=${(e) => { ui.draft.hoofdingredient = e.target.value; }}>
+                  ${PICKER_HOOFD.map(h => html`<option value=${h} ?selected=${h === ui.draft.hoofdingredient}>${h || '— geen —'}</option>`)}
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label>
                 Kcal
                 <input
                   type="number" min="0" step="10"
@@ -249,27 +295,31 @@ function view() {
                   @input=${(e) => { ui.draft.kcal = e.target.value; }}
                 />
               </label>
-              <label>
-                Type
-                <select .value=${ui.draft.type} @change=${(e) => { ui.draft.type = e.target.value; }}>
-                  ${SLOTS.map(s => html`<option value=${s.id} ?selected=${s.id === ui.draft.type}>${s.label} (${s.id})</option>`)}
-                </select>
-              </label>
+              <span></span>
             </div>
             <fieldset>
-              <legend>Geschikt voor</legend>
-              ${['peter','miranda','beiden'].map(p => html`
+              <legend>Kookwijze</legend>
+              ${PICKER_KOOKWIJZE.map(k => html`
                 <label class="inline">
-                  <input
-                    type="checkbox"
-                    ?checked=${ui.draft.suitable_for.includes(p)}
+                  <input type="checkbox" ?checked=${ui.draft.kookwijze.includes(k)}
                     @change=${(e) => {
-                      const set = new Set(ui.draft.suitable_for);
-                      if (e.target.checked) set.add(p); else set.delete(p);
-                      ui.draft.suitable_for = Array.from(set);
-                    }}
-                  />
-                  ${p}
+                      const set = new Set(ui.draft.kookwijze);
+                      if (e.target.checked) set.add(k); else set.delete(k);
+                      ui.draft.kookwijze = Array.from(set);
+                    }} /> ${k}
+                </label>
+              `)}
+            </fieldset>
+            <fieldset>
+              <legend>Dieet</legend>
+              ${PICKER_DIEET.map(d => html`
+                <label class="inline">
+                  <input type="checkbox" ?checked=${ui.draft.dieet.includes(d)}
+                    @change=${(e) => {
+                      const set = new Set(ui.draft.dieet);
+                      if (e.target.checked) set.add(d); else set.delete(d);
+                      ui.draft.dieet = Array.from(set);
+                    }} /> ${d}
                 </label>
               `)}
             </fieldset>

@@ -34,6 +34,10 @@ create table if not exists public.meals (
   source_url      text,                       -- v2.3: URL waar het recept oorspronkelijk vandaan komt (Miljuschka, AH, 24kitchen)
   source_site     text,                       -- v2.3: domeinnaam (miljuschka.nl, ah.nl, 24kitchen.nl)
   description     text,                       -- v2.3: korte omschrijving uit schema.org/Recipe
+  cuisine         text,                       -- v2.4: italiaans/mexicaans/aziatisch/indiaas/frans/hollands/mediterraan/amerikaans/bbq
+  kookwijze       text[] not null default '{}', -- v2.4: oven/airfryer/eenpans/traybake/wok/soep/salade/grill/pasta/stamppot/slowcooker/smoothie
+  hoofdingredient text,                       -- v2.4: kip/rund/varken/lam/vis/vegetarisch/pasta/rijst/aardappel/brood/ei/zuivel
+  dieet           text[] not null default '{}', -- v2.4: vegetarisch/vegan/glutenvrij/lactosevrij/koolhydraatarm
   created_by      uuid references public.profiles(id),
   created_at      timestamptz not null default now(),
   deleted_at      timestamptz null   -- soft-delete: blijft in oude weken zichtbaar, weg uit bibliotheek
@@ -45,6 +49,10 @@ create index if not exists meals_tags_idx         on public.meals using gin (tag
 create index if not exists meals_created_by_idx   on public.meals (created_by);
 create index if not exists meals_deleted_at_idx   on public.meals (deleted_at);
 create index if not exists meals_source_site_idx  on public.meals (source_site) where source_site is not null;
+create index if not exists meals_cuisine_idx         on public.meals (cuisine) where cuisine is not null;
+create index if not exists meals_kookwijze_idx       on public.meals using gin (kookwijze);
+create index if not exists meals_hoofdingredient_idx on public.meals (hoofdingredient) where hoofdingredient is not null;
+create index if not exists meals_dieet_idx           on public.meals using gin (dieet);
 
 -- ============================================================
 -- 3. weeks  (één per persoon per week)

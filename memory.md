@@ -621,6 +621,48 @@ Totaal 66 tests groen.
 
 ---
 
+## 2026-05-09 — v2.4: Bibliotheek als database-view
+
+**Aanleiding.** Na de bulk-import (418 recepten) was 'Stel zelf samen' onhandelbaar zonder filters. Peter wil filters voor type, keuken en kooktijd, plus extra dingen die ik kan voorstellen.
+
+**Schema (`v2_4_meals_taxonomy_columns`).** Nieuwe kolommen op `meals`:
+- `cuisine text` — single (italiaans/mexicaans/aziatisch/indiaas/frans/hollands/mediterraan/amerikaans/bbq)
+- `kookwijze text[]` — multi (oven, airfryer, eenpans, traybake, wok, soep, salade, grill, pasta, stamppot, slowcooker, smoothie)
+- `hoofdingredient text` — single (kip, rund, varken, lam, vis, vegetarisch, pasta, rijst, aardappel, brood, ei, zuivel)
+- `dieet text[]` — multi (vegetarisch, vegan, glutenvrij, lactosevrij, koolhydraatarm)
+- 4 indexen voor filter-performance.
+
+**Auto-tagging.** Eenmalig SQL-script met regex-CASEs op `meals.name`. Coverage:
+- cuisine: 178/464 (38%)
+- kookwijze: 107/464 (23%)
+- hoofdingredient: 312/464 (67%)
+- dieet: 182/464 (39%)
+
+Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps met grilled chicken' kan mexicaans of amerikaans zijn). Verbetering voor v2.5: ingredient-detectie als naam geen signal geeft.
+
+**Hernoemd.** Route blijft `'maker'` (deeplinks + shopping.js verwijzen naar `#maker`). Nav-label: 'Stel zelf samen' → **'Bibliotheek'**. Header binnen de view ook 'Bibliotheek'.
+
+**UI in `views/build.js` (volledige herschrijving).**
+- Filter-secties: zoek, slot (incl. tussendoortje als groep van snack_*), keuken, kooktijd-buckets (≤15/30/45/60/60+), hoofdingrediënt, kookwijze (multi), dieet (multi), bron (dietist/miljuschka/ah/24kitchen/eigen), max-kcal, seizoen, tag.
+- Counts per chip via `applyFiltersExcept()` — counts respecteren alle ANDERE actieve filters zodat ze relevant blijven.
+- Sorteer-dropdown rechtsboven: Naam / Kooktijd / Calorieën / #ingrediënten / Nieuwste / Beoordeling.
+- '+ recept'-knop opent meal-creator met default-type 'diner' (was 'ontbijt').
+- Bron 'Diëtist' is afgeleid: source_site IS NULL en niet handmatig aangemaakt → fallback 'eigen' voor nu. Echte detectie via weeks.source='dietist' is een v2.5-uitbreiding.
+
+**Slot-filter met tussendoortjes-groep.** SLOT_FILTER groepeert snack_ochtend/middag/avond als één 'Tussendoor'-chip. Andere views (week, dag) blijven werken met de drie aparte slot-types.
+
+**`components/meal-picker.js`.** Form-velden toegevoegd voor cuisine (dropdown), hoofdingredient (dropdown), kookwijze (checkboxes), dieet (checkboxes), bereidingstijd (number). 'Geschikt voor'-fieldset (peter/miranda/beiden) is verwijderd — past bij Peter's wens 'niet meer verdelen onder personen'. `suitable_for` blijft default `['beiden']` in DB voor backwards-compat.
+
+**Beslissingen voor later.**
+- Echte rating-aggregaat per meal (vs week_meals huidige flow) — sortering 'Beoordeling' is nu placeholder 0.
+- Source-detectie 'dietist' via JOIN met weeks-tabel.
+- Grid/lijst-toggle voor de results.
+- Favorieten-veld op meals.
+- Multi-select & bulk-toevoegen aan een week.
+- Ingredient-gebaseerde cuisine-detectie voor de 286 niet-getagde recepten.
+
+---
+
 ## 2026-05-09 — v2.3a: UI-cleanup in 'Stel zelf samen'
 
 **Aanleiding.** Peter wil dat de Maker-tab (= 'Stel zelf samen') meer als een gedeelde recepten-pool aanvoelt en niet meer per persoon filtert. Plus: de winkel-keuze per ingrediënt is overbodig sinds v2.0 toen winkel-routes uit de boodschappenlijst gingen.

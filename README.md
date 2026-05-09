@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.3** (rating per diner, kwark-split in boodschappen, week 20 geïmporteerd, dubbele meals in bibliotheek opgeschoond).
+Huidige versie: **v2.4** (Bibliotheek als database-view met filters voor keuken, kooktijd, hoofdingrediënt, kookwijze, dieet, bron en sortering).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -29,6 +29,7 @@ Versies in volgorde:
 - v2.3 rating per diner (👍/neutraal/👎 met auto soft-delete bij negatief), kwark-split in boodschappen (volle ≠ magere), import week 20, cleanup van 14 duplicate meals — klaar
 - v2.3-import bulk recipe-scrape: 220 dineren + 133 ontbijten + 104 lunches uit Miljuschka, AH Allerhande, 24kitchen — klaar
 - v2.3a UI-cleanup in 'Stel zelf samen': geen voor-wie-filter meer, geen winkel-dropdown in ingredient-editor — klaar
+- v2.4 Bibliotheek (hernaamd uit Stel zelf samen): database-view met keuken-, kooktijd-, hoofdingrediënt-, kookwijze-, dieet-, bron-filter, sorteer-dropdown en counts per chip — klaar
 
 ## Architectuur
 
