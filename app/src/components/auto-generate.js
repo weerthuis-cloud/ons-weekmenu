@@ -19,6 +19,7 @@ const ui = {
   open: false,
   ctx: null,    // { year, week, persoon, onDone }
   filters: { dieet: new Set(), cuisine: '', maxBereidingstijd: '', alleenFavoriet: false },
+  opties: { behoudBestaande: false, metSnacks: false, macroAware: true },
   busy: false,
   result: null,
   error: null,
@@ -40,6 +41,7 @@ export function openAutoGenerate({ year, week, persoon, onDone }) {
   ui.open = true;
   ui.ctx = { year, week, persoon, onDone };
   ui.filters = { dieet: new Set(), cuisine: '', maxBereidingstijd: '', alleenFavoriet: false };
+  ui.opties = { behoudBestaande: false, metSnacks: false, macroAware: true };
   ui.busy = false; ui.result = null; ui.error = null;
   rerender();
 }
@@ -64,11 +66,12 @@ async function submit() {
       maxBereidingstijd: ui.filters.maxBereidingstijd ? parseInt(ui.filters.maxBereidingstijd, 10) : undefined,
       alleenFavoriet: ui.filters.alleenFavoriet,
     };
+    const opties = { ...ui.opties };
     const results = [];
     for (const slug of targets) {
       const p = profiles[slug];
       if (!p) continue;
-      const r = await generateWeekMenu({ ownerId: p.id, year: ui.ctx.year, week: ui.ctx.week, filters });
+      const r = await generateWeekMenu({ ownerId: p.id, year: ui.ctx.year, week: ui.ctx.week, filters, opties });
       results.push({ slug, ...r });
     }
     ui.result = results;
@@ -125,10 +128,26 @@ function view() {
           </div>
 
           <div class="ag-section">
+            <div class="cmt">// opties</div>
             <label class="ag-check">
               <input type="checkbox" ?checked=${f.alleenFavoriet}
                 @change=${(e) => { f.alleenFavoriet = e.target.checked; rerender(); }} />
               Alleen uit favorieten
+            </label>
+            <label class="ag-check">
+              <input type="checkbox" ?checked=${ui.opties.behoudBestaande}
+                @change=${(e) => { ui.opties.behoudBestaande = e.target.checked; rerender(); }} />
+              Behoud bestaande maaltijden (alleen lege slots vullen)
+            </label>
+            <label class="ag-check">
+              <input type="checkbox" ?checked=${ui.opties.metSnacks}
+                @change=${(e) => { ui.opties.metSnacks = e.target.checked; rerender(); }} />
+              Ook tussendoortjes meegenereren
+            </label>
+            <label class="ag-check">
+              <input type="checkbox" ?checked=${ui.opties.macroAware}
+                @change=${(e) => { ui.opties.macroAware = e.target.checked; rerender(); }} />
+              Verdeel kcal volgens dagdoel (25/30/30 over hoofdmaaltijden)
             </label>
           </div>
 
@@ -136,7 +155,7 @@ function view() {
             <div class="ag-result">
               <div class="cmt">// resultaat</div>
               ${ui.result.map(r => html`
-                <p>${r.slug}: <strong>${r.inserted}</strong> maaltijden geplaatst (pool van ${r.poolSize} recepten).
+                <p>${r.slug}: <strong>${r.inserted}</strong> maaltijden geplaatst (pool van ${r.poolSize} recepten${r.kcalDoel ? `, kcal-doel ${r.kcalDoel}` : ''}).
                 ${r.stats?.mismatch?.length ? html`<br><span class="warn">⚠ niet gevuld: ${r.stats.mismatch.join(', ')}</span>` : ''}</p>
               `)}
             </div>

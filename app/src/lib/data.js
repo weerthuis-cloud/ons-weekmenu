@@ -252,11 +252,15 @@ export async function setWeekMealPorties({ id, weekId, porties }) {
 // v1.3: bulk-update porties voor meerdere records tegelijk. Voorkomt race
 // condition waarbij N losse setWeekMealPorties calls N×notify triggeren en
 // tussentijds half-bijgewerkte DB-state inlezen.
-// v2.11: auto-genereer een week op basis van filter-criteria.
-// Vult ontbijt/lunch/diner voor 7 dagen met willekeurige meals uit pool die filters matcht.
-// Bestaande hoofdmaaltijden in die week worden overschreven.
-// filters: { dieet?: string[], cuisine?: string, maxBereidingstijd?: number, alleenFavoriet?: bool, kookwijze?: string[] }
-export async function generateWeekMenu({ ownerId, year, week, filters = {} }) {
+// v2.11+v2.12: auto-genereer een week op basis van filter + macro-targets.
+// filters:
+//   dieet[]: alle tags moeten matchen (eiwitrijk/keto/vega/...)
+//   cuisine, maxBereidingstijd, alleenFavoriet, kookwijze[]
+// opties:
+//   behoudBestaande: bool — alleen lege slots vullen, niet overschrijven
+//   metSnacks: bool — ook tussendoortjes (snack_ochtend/middag/avond) genereren
+//   macroAware: bool — verdeel kcal volgens 25/35/40 over ontbijt/lunch/diner als profile targets gezet
+export async function generateWeekMenu({ ownerId, year, week, filters = {}, opties = {} }) {
   const meals = await listMeals();
   const pool = meals.filter(m => {
     if (filters.dieet?.length && !filters.dieet.every(d => (m.dieet || []).includes(d))) return false;
@@ -267,20 +271,58 @@ export async function generateWeekMenu({ ownerId, year, week, filters = {} }) {
     return true;
   });
 
-  // Verzeker week-rij
+  // Profile + macro-targets ophalen
+  const { data: prof } = await supabase.from('profiles').select('*').eq('id', ownerId).single();
+  const kcalDoel = prof?.kcal_doel || null;
+
+  // Slot-distributie: percentage van dagelijks kcal-doel
+  const SLOT_PCT = {
+    ontbijt: 0.25,
+    snack_ochtend: 0.05,
+    lunch: 0.30,
+    snack_middag: 0.05,
+    diner: 0.30,
+    snack_avond: 0.05,
+  };
+  const TOLERANCE = 0.50; // ±50% per maaltijd is ruim genoeg om voldoende keuzes te hebben
+
+  function slotKcalRange(slot) {
+    if (!opties.macroAware || !kcalDoel) return null;
+    const target = kcalDoel * SLOT_PCT[slot];
+    return { min: target * (1 - TOLERANCE), max: target * (1 + TOLERANCE) };
+  }
+
   let weekRow = await getWeek(ownerId, year, week);
   if (!weekRow) weekRow = await addWeek({ ownerId, year, week, source: 'eigen' });
 
-  const slots = ['ontbijt', 'lunch', 'diner'];
-  const inserts = [];
-  const stats = { ontbijt: 0, lunch: 0, diner: 0, mismatch: [] };
+  // Bestaande week_meals ophalen om 'behoud bestaande' te respecteren
+  const existing = await getWeekMeals(weekRow.id);
+  const occupied = new Set();
+  if (opties.behoudBestaande) {
+    for (const wm of existing) occupied.add(`${wm.day}-${wm.slot}`);
+  }
 
-  // Voorkom directe herhaling: track laatste 2 picks per slot
-  const recentPicks = { ontbijt: [], lunch: [], diner: [] };
+  const slots = opties.metSnacks
+    ? ['ontbijt', 'snack_ochtend', 'lunch', 'snack_middag', 'diner', 'snack_avond']
+    : ['ontbijt', 'lunch', 'diner'];
+
+  const inserts = [];
+  const stats = { ontbijt: 0, snack_ochtend: 0, lunch: 0, snack_middag: 0, diner: 0, snack_avond: 0, mismatch: [] };
+  const recentPicks = Object.fromEntries(slots.map(s => [s, []]));
 
   for (let day = 1; day <= 7; day++) {
     for (const slot of slots) {
-      const candidates = pool.filter(m => m.type === slot);
+      if (occupied.has(`${day}-${slot}`)) continue;
+      const range = slotKcalRange(slot);
+      let candidates = pool.filter(m => m.type === slot);
+      if (range) {
+        const inRange = candidates.filter(m => {
+          if (m.kcal == null) return true; // unknown: laat toe (anders teveel uitgesloten)
+          const kc = (Number(m.serves) > 0 ? m.kcal * 2 : m.kcal); // diner-recept × 2 porties
+          return kc >= range.min && kc <= range.max;
+        });
+        if (inRange.length > 0) candidates = inRange;
+      }
       const fresh = candidates.filter(m => !recentPicks[slot].includes(m.id));
       const choices = fresh.length > 0 ? fresh : candidates;
       if (choices.length === 0) {
@@ -296,8 +338,13 @@ export async function generateWeekMenu({ ownerId, year, week, filters = {} }) {
     }
   }
 
-  // Wis hoofdmaaltijden in die week (snacks blijven staan)
-  await supabase.from('week_meals').delete().eq('week_id', weekRow.id).in('slot', slots);
+  // Wis te-overschrijven slots als behoudBestaande=false
+  if (!opties.behoudBestaande) {
+    await supabase.from('week_meals').delete().eq('week_id', weekRow.id).in('slot', slots);
+  } else {
+    // Wis alleen lege slots-keys waar we iets gaan invoegen (om duplicates te voorkomen).
+    // Bij behoudBestaande zouden er geen botsingen moeten zijn want we sla occupied over.
+  }
 
   if (inserts.length > 0) {
     const { error } = await supabase.from('week_meals').insert(inserts);
@@ -306,7 +353,7 @@ export async function generateWeekMenu({ ownerId, year, week, filters = {} }) {
 
   cache.weekMeals.delete(weekRow.id);
   notify('week_meals');
-  return { weekRow, inserted: inserts.length, poolSize: pool.length, stats };
+  return { weekRow, inserted: inserts.length, poolSize: pool.length, stats, kcalDoel };
 }
 
 export async function setWeekMealsPorties({ ids, weekIds, porties }) {
