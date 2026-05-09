@@ -79,6 +79,7 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
         position: absolute; inset: 0;
         width: 100%; height: 100%;
         object-fit: cover;
+        object-position: 50% 70%;  /* focal point lager voor portrait-foto's met gerecht in handen */
         display: block;
         background: var(--bg-2);
         opacity: 0;
