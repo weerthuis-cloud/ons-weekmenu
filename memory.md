@@ -621,6 +621,25 @@ Totaal 66 tests groen.
 
 ---
 
+## 2026-05-09 — v2.5: mobile vandaag-scroll + diëtist-bron + cuisine-detectie via ingrediënten
+
+**Aanleiding.** Drie kleinere verbeteringen direct na v2.4: (1) mobiel weekmenu scrolt nu automatisch naar de huidige dag, (2) diëtist-recepten staan nu correct als bron 'diëtist' in de Bibliotheek-filter, (3) cuisine-coverage opgekrikt door ingrediënt-detectie.
+
+**1. Mobile auto-scroll (week-view).**
+Nieuwe state-flag `vs.scrolledToToday`. In `WeekView()` direct aan begin: `maybeScrollToToday(isCurrentWeek)`. Helper: alleen actief op viewport ≤ 720px en isCurrentWeek, eenmalig per week (reset bij `changeWeek` en `gotoWeek`). Gebruikt `queueMicrotask` na render om de `.day-col.today` element te vinden en `scrollIntoView({ behavior: 'smooth', block: 'center' })`. Werkt op iPhone en kleine Android-schermen waar de week-grid 1-koloms wordt.
+
+**2. Diëtist-bron via JOIN.**
+SQL-update: alle meals zonder `source_site` die ergens als `week_meals` zaten in een week met `source='dietist'` krijgen `source_site='dietist'`. Idempotent: alleen waar source_site nog null was. 46 recepten gemarkeerd. Alle 464 actieve meals hebben nu een herkenbare bron.
+
+**3. Cuisine-detectie via ingrediënten.**
+Voor de 286 recepten zonder cuisine na v2.4 (naam-detectie miste te veel): SQL-update met EXISTS-clausules over `jsonb_array_elements(ingredients)`. Per cuisine een keyword-set op ingredient-namen (mozzarella+ricotta+gnocchi → italiaans, sojasaus+gember+ketjap → aziatisch, harissa+couscous+tahin → mediterraan, etc.). Volgorde: meest specifieke eerst (italiaans, mexicaans, aziatisch, indiaas, frans, mediterraan, amerikaans, hollands).
+
+Coverage: 38% → 67% (178 → 309 van 464). Resterende 155 zijn vooral algemene/Hollandse recepten zonder cultureel signaal in naam of ingrediënten (boterham met kaas, kwark met bessen). Acceptabel: filter werkt nog steeds en niet-getagde verschijnen onder 'alle'.
+
+**Versiebump v2.4 → v2.5.** v2.4 was niet apart gecommit; alles in één v2.5-commit.
+
+---
+
 ## 2026-05-09 — v2.4: Bibliotheek als database-view
 
 **Aanleiding.** Na de bulk-import (418 recepten) was 'Stel zelf samen' onhandelbaar zonder filters. Peter wil filters voor type, keuken en kooktijd, plus extra dingen die ik kan voorstellen.

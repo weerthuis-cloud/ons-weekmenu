@@ -22,6 +22,8 @@ const vs = {
   profiles: null,
   error: null,
   initialized: false,
+  // v2.5: mobiel auto-scroll naar 'vandaag'-kolom. Reset bij week-change.
+  scrolledToToday: false,
 };
 
 function ensureInit() {
@@ -67,6 +69,7 @@ function changeWeek(delta) {
   vs.week += delta;
   if (vs.week < 1) { vs.week = 52; vs.year -= 1; }
   else if (vs.week > 52) { vs.week = 1; vs.year += 1; }
+  vs.scrolledToToday = false; // bij week-wissel opnieuw scrollen wanneer huidige week
   appActions.setViewWeek(vs.year, vs.week);
   loadAll();
 }
@@ -75,8 +78,25 @@ export function gotoWeek(year, week) {
   ensureInit();
   vs.year = year;
   vs.week = week;
+  vs.scrolledToToday = false;
   appActions.setViewWeek(vs.year, vs.week);
   loadAll();
+}
+
+// v2.5: na render automatisch de 'vandaag'-kolom centreren op mobiel.
+// Alleen als isCurrentWeek en viewport ≤ 720px en nog niet eerder gescrolled.
+function maybeScrollToToday(isCurrentWeek) {
+  if (!isCurrentWeek) return;
+  if (vs.scrolledToToday) return;
+  if (typeof window === 'undefined') return;
+  if (!window.matchMedia || !window.matchMedia('(max-width: 720px)').matches) return;
+  queueMicrotask(() => {
+    const el = document.querySelector('.day-col.today');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      vs.scrolledToToday = true;
+    }
+  });
 }
 
 function findMeal(slug, day, slot) {
@@ -164,6 +184,7 @@ export function WeekView(state) {
   const dates = weekDates(vs.year, vs.week);
   const persoon = state.persoon;
   const isCurrentWeek = today.year === vs.year && today.week === vs.week;
+  maybeScrollToToday(isCurrentWeek);
 
   const focusedSlug = persoon === 'beiden' ? 'peter' : persoon;
   const sparkData = dayKcalArray(focusedSlug);
