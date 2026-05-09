@@ -31,6 +31,9 @@ create table if not exists public.meals (
   seizoen         text[] not null default '{}', -- 'lente','zomer','herfst','winter'
   recipe          text,                       -- v0.9: bereidingsinstructie / receptbijlage
   serves          int,                        -- v1.2: voor hoeveel personen het recept bedoeld is (null = solo-meal)
+  source_url      text,                       -- v2.3: URL waar het recept oorspronkelijk vandaan komt (Miljuschka, AH, 24kitchen)
+  source_site     text,                       -- v2.3: domeinnaam (miljuschka.nl, ah.nl, 24kitchen.nl)
+  description     text,                       -- v2.3: korte omschrijving uit schema.org/Recipe
   created_by      uuid references public.profiles(id),
   created_at      timestamptz not null default now(),
   deleted_at      timestamptz null   -- soft-delete: blijft in oude weken zichtbaar, weg uit bibliotheek
@@ -41,6 +44,7 @@ create index if not exists meals_suitable_for_idx on public.meals using gin (sui
 create index if not exists meals_tags_idx         on public.meals using gin (tags);
 create index if not exists meals_created_by_idx   on public.meals (created_by);
 create index if not exists meals_deleted_at_idx   on public.meals (deleted_at);
+create index if not exists meals_source_site_idx  on public.meals (source_site) where source_site is not null;
 
 -- ============================================================
 -- 3. weeks  (één per persoon per week)

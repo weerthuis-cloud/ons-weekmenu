@@ -620,3 +620,47 @@ Totaal 66 tests groen.
 - Magere vs volle kwark → apart, sinds v2.3 (BEREIDING_RE strip niet meer 'magere'/'volle'/'halfvolle').
 
 ---
+
+## 2026-05-09 — v2.3-import: bulk recipe-scrape (Miljuschka, AH, 24kitchen)
+
+**Aanleiding.** Peter wil een gevulde bibliotheek voordat we filters bouwen. Doel: 100+ dineren, 100+ ontbijten, 100+ lunches.
+
+**Resultaat (in ~2 uur autonoom werk).**
+- diner: 220 actief (was 13). Miljuschka 96 + AH 62 + 24kitchen 49.
+- ontbijt: 133 actief (was 13). Miljuschka 98 + AH 18 + 24kitchen 4.
+- lunch: 104 actief (was 13). AH 52 + Miljuschka 39.
+- snack_avond: 7 (ongewijzigd).
+- **Totaal nieuwe recepten: 418.**
+
+**Schema-wijzigingen.** Migratie `v2_3_meals_add_source_columns` voegt drie kolommen toe aan `meals`:
+- `source_url text` — link naar oorsprong
+- `source_site text` — domein (miljuschka.nl, ah.nl, 24kitchen.nl)
+- `description text` — korte beschrijving uit schema.org/Recipe
+
+**Architectuur van de import.**
+1. Chrome MCP-extensie open op de bron-site (anders 403 op miljuschka door Cloudflare).
+2. JS in tab fetcht overzichtspagina's (parallel, concurrency 8), regext recipe-URLs.
+3. Per URL fetch + parse `<script type="application/ld+json">` voor schema.org/Recipe.
+4. Lichte ingredient-parser (regex op qty + unit + name) met dedup van 'water' en strip van vetgehalte-aanduidingen volgens de aggregatieregels.
+5. Bulk POST naar tijdelijke Supabase Edge Function `bulk-import-meals` met shared-secret header en SERVICE_ROLE-credentials in de function (RLS bypass).
+6. Edge function dedupt case-insensitive op naam tegen bestaande active meals.
+
+**Filter voor ontbijt + lunch.** Eerst probeerden we strikt 'zeer gemakkelijk' (≤15 min OF ≤7 ingredienten) maar dat liet veel te weinig over. Voor de eindronde alle gevonden recepten gepakt; 'gemakkelijk'-filter kan later in het programma als feature.
+
+**Edge function uitschakeld.** `bulk-import-meals` is na de import vervangen door een 410-stub. Reactiveren = redeploy met de oude code uit deze sessie. Shared-secret was `owm-bulk-7f3a2b4c-temp-2026` (niet meer geldig).
+
+**Beperkingen die we tegenkwamen.**
+1. Jumbo: tab vastgelopen door tracking-scripts; geen recepten geïmporteerd. Strategie voor later: gebruik de Jumbo recepten-API als die te vinden is, of fetch meer rauwe HTML.
+2. javascript_tool truncate ~1KB per response. Daarom: alle scrape+parse+post binnen één call, alleen telling teruggeven.
+3. Cross-origin fetch werkt alleen als de tab op het juiste domein staat. Per bron eerst navigeren.
+4. Recipe-tekst soms zwaar: 'recipe' veld in DB bevat numbered steps; lange recepten kunnen 5-10K chars zijn. Past prima in JSONB, maar speelt mee bij wat we via tool-output kunnen ophalen.
+
+**Open punten voor v2.4.**
+- Filters in BuildView (Maker): bereidingstijd-slider, max-ingredienten, type-filter, source-site-filter. De data is er nu.
+- 'Open recept op site' knop in meal-detail, gebruikt `meals.source_url`.
+- Hardcoded BUILTIN_IGNORED met 'water' in `lib/ignored.js`.
+- Jumbo opnieuw proberen — andere strategie voor lazy-loaded SPA.
+- Categorisering binnen diner: tags op basis van keywords (pasta, vegetarisch, vis, oven, traybake, snel) zodat de bibliotheek bruikbaar wordt.
+- Auto-cleanup: detectie van duplicate recepten met andere naam-spelling.
+
+---

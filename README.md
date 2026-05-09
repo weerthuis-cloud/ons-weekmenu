@@ -27,6 +27,7 @@ Versies in volgorde:
 - v2.1 CI tests gate — klaar
 - v2.2a–d UI-polish, edge-cases — klaar
 - v2.3 rating per diner (👍/neutraal/👎 met auto soft-delete bij negatief), kwark-split in boodschappen (volle ≠ magere), import week 20, cleanup van 14 duplicate meals — klaar
+- v2.3-import bulk recipe-scrape: 220 dineren + 133 ontbijten + 104 lunches uit Miljuschka, AH Allerhande, 24kitchen — klaar
 
 ## Architectuur
 
