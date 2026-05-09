@@ -21,6 +21,9 @@ function mealToDraft(meal, fallbackSlot = '') {
     hoofdingredient: meal?.hoofdingredient ?? '',
     kookwijze: meal?.kookwijze?.length ? [...meal.kookwijze] : [],
     dieet: meal?.dieet?.length ? [...meal.dieet] : [],
+    recipe: meal?.recipe ?? '',
+    description: meal?.description ?? '',
+    source_url: meal?.source_url ?? '',
     suitable_for: meal?.suitable_for?.length ? [...meal.suitable_for] : ['beiden'],
     ingredients: (meal?.ingredients?.length ? meal.ingredients : [null]).map(i => ({
       name: i?.name ?? '',
@@ -52,7 +55,7 @@ const ui = {
   busy: false,
   error: null,
   // draft-data voor 'create' en 'edit'
-  draft: { name: '', kcal: '', type: '', bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], suitable_for: ['beiden'], ingredients: [emptyIngredient()] },
+  draft: { name: '', kcal: '', type: '', bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] },
 };
 
 function ensureHost() {
@@ -79,7 +82,7 @@ export async function openMealPicker({ slot, suggestedSuitableFor = 'beiden', on
   ui.error = null;
   ui.onPick = onPick;
   ui.onSaved = null;
-  ui.draft = { name: '', kcal: '', type: slot, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], suitable_for: [suggestedSuitableFor], ingredients: [emptyIngredient()] };
+  ui.draft = { name: '', kcal: '', type: slot, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', suitable_for: [suggestedSuitableFor], ingredients: [emptyIngredient()] };
   ui.meals = [];
   rerender();
   try {
@@ -112,7 +115,7 @@ export function openMealCreator({ defaultType = 'ontbijt', onSaved } = {}) {
   ui.onSaved = onSaved;
   // Wanneer onPick null is en mode='create', behandel save als 'add then close+notify'
   ui.onPick = onSaved ? ((meal) => onSaved(meal)) : null;
-  ui.draft = { name: '', kcal: '', type: defaultType, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
+  ui.draft = { name: '', kcal: '', type: defaultType, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
   rerender();
 }
 
@@ -141,6 +144,9 @@ async function saveDraft(e) {
       hoofdingredient: ui.draft.hoofdingredient || null,
       kookwijze: ui.draft.kookwijze || [],
       dieet: ui.draft.dieet || [],
+      recipe: ui.draft.recipe?.trim() || null,
+      description: ui.draft.description?.trim() || null,
+      source_url: ui.draft.source_url?.trim() || null,
       ingredients: ui.draft.ingredients
         .filter(ing => ing.name.trim())
         .map(ing => ({
@@ -323,6 +329,25 @@ function view() {
                 </label>
               `)}
             </fieldset>
+            <label>
+              Korte beschrijving
+              <input type="text" placeholder="bv. snel pasta-recept met tomaat en basilicum"
+                .value=${ui.draft.description}
+                @input=${(e) => { ui.draft.description = e.target.value; }} />
+            </label>
+            <label>
+              Bron-URL <span class="hint">(optioneel)</span>
+              <input type="url" placeholder="https://miljuschka.nl/..."
+                .value=${ui.draft.source_url}
+                @input=${(e) => { ui.draft.source_url = e.target.value; }} />
+            </label>
+            <label>
+              Bereidingswijze <span class="hint">(stappen, één per regel)</span>
+              <textarea rows="8" class="recipe-area"
+                placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
+                .value=${ui.draft.recipe}
+                @input=${(e) => { ui.draft.recipe = e.target.value; }}></textarea>
+            </label>
             <fieldset class="ing">
               <legend>Ingrediënten <span class="hint">(naam verplicht, rest optioneel)</span></legend>
               <div class="ing-rows">
@@ -391,7 +416,7 @@ function view() {
       .lead { color: var(--ink-2); margin: 4px 0 0; font-size: 13px; }
       .btn.small { height: 28px; padding: 0 10px; font-size: 12px; }
 
-      input[type="search"], input[type="text"], input[type="number"], input:not([type]), select {
+      input[type="search"], input[type="text"], input[type="number"], input[type="url"], input:not([type]), select, textarea {
         font: inherit;
         padding: 10px 12px;
         border-radius: var(--r-md);
@@ -399,8 +424,10 @@ function view() {
         background: var(--bg);
         color: var(--ink);
         width: 100%;
+        box-sizing: border-box;
       }
-      input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+      textarea.recipe-area { font-family: inherit; line-height: 1.5; resize: vertical; min-height: 120px; }
+      input:focus, select:focus, textarea:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
 
       .mp-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
       .empty { color: var(--ink-3); font-size: 14px; padding: 14px; text-align: center; }
