@@ -5,11 +5,10 @@ import { html, render } from 'lit-html';
 import { listMeals, addMeal, updateMeal, softDeleteMeal } from '../lib/data.js';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { UNITS } from '../lib/units.js';
-import { WINKELS } from '../lib/winkels.js';
 import { SlotIcon } from './slot-icon.js';
 
 function emptyIngredient() {
-  return { name: '', qty: '', unit: '', store: '' };
+  return { name: '', qty: '', unit: '' };
 }
 
 function mealToDraft(meal, fallbackSlot = '') {
@@ -22,7 +21,8 @@ function mealToDraft(meal, fallbackSlot = '') {
       name: i?.name ?? '',
       qty: i?.qty ?? '',
       unit: i?.unit ?? '',
-      store: i?.store ?? '',
+      // store: bewust niet meer in UI; bestaande waarde blijft in DB-record bewaard tot save.
+      _origStore: i?.store ?? null,
     })),
   };
 }
@@ -131,7 +131,9 @@ async function saveDraft(e) {
           name: ing.name.trim(),
           qty: ing.qty === '' || ing.qty == null ? null : Number(ing.qty),
           unit: ing.unit || null,
-          store: ing.store || null,
+          // store-veld behouden uit origineel zodat oude data niet verloren gaat;
+          // nieuwe rijen (zonder _origStore) krijgen null.
+          store: ing._origStore ?? null,
         })),
       suitable_for: ui.draft.suitable_for,
     };
@@ -292,9 +294,6 @@ function view() {
                     <select class="ing-unit" .value=${ing.unit} @change=${(e) => { ing.unit = e.target.value; }}>
                       ${UNITS.map(u => html`<option value=${u.id} ?selected=${u.id === ing.unit}>${u.label}</option>`)}
                     </select>
-                    <select class="ing-store" .value=${ing.store} @change=${(e) => { ing.store = e.target.value; }}>
-                      ${WINKELS.map(w => html`<option value=${w.id} ?selected=${w.id === ing.store}>${w.label}</option>`)}
-                    </select>
                     <button type="button" class="ing-x" title="verwijder" @click=${() => removeIngredientRow(i)}>×</button>
                   </div>
                 `)}
@@ -389,7 +388,7 @@ function view() {
       .ing-rows { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
       .ing-row {
         display: grid;
-        grid-template-columns: minmax(0, 2.2fr) 60px 90px 110px 28px;
+        grid-template-columns: minmax(0, 2.2fr) 60px 90px 28px;
         gap: 4px;
         align-items: center;
       }
@@ -403,7 +402,6 @@ function view() {
       .btn.ghost.danger:hover { background: var(--tomato-tint); }
       @media (max-width: 480px) {
         .ing-row { grid-template-columns: 1fr 50px 70px 28px; }
-        .ing-row .ing-store { grid-column: 1 / -1; }
       }
     </style>
   `;

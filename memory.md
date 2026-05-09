@@ -621,6 +621,22 @@ Totaal 66 tests groen.
 
 ---
 
+## 2026-05-09 — v2.3a: UI-cleanup in 'Stel zelf samen'
+
+**Aanleiding.** Peter wil dat de Maker-tab (= 'Stel zelf samen') meer als een gedeelde recepten-pool aanvoelt en niet meer per persoon filtert. Plus: de winkel-keuze per ingrediënt is overbodig sinds v2.0 toen winkel-routes uit de boodschappenlijst gingen.
+
+**Gedaan.**
+- `views/build.js`: voor-wie-filter (chips iedereen/beiden/Peter/Miranda) volledig verwijderd. `vs.suitable` state weg, filter-toepassing weg, clearFilters/hasFilters bijgewerkt. Tag-filter blijft, kcal-slider blijft, seizoen blijft, slot-type blijft.
+- `components/meal-picker.js`: winkel-`<select>` verwijderd uit de ingredient-rij. WINKELS-import weg. `emptyIngredient()` heeft geen `store`-veld meer. `ing-row` grid-template-columns aangepast naar 4 kolommen (was 5). Mobile media-query bijgewerkt.
+- Bestaande store-data in DB blijft staan (`_origStore` houdt de waarde vast bij edit, schrijft 'm onveranderd terug). Geen verlies van historische info.
+- `version.js`: v2.3 → v2.3a.
+
+**Bewust niet gedaan.**
+- `lib/winkels.js` en `lib/winkelroutes.js` blijven staan (geen UI-koppeling meer maar weghalen kost een ongerelateerde commit).
+- `meals.suitable_for` array blijft in schema. Nieuwe meals krijgen default `['beiden']` via meal-picker. Boodschappenlijst-aggregator gebruikt het niet meer; de week-views gebruiken het indirect via persoon-toggle in header.
+
+---
+
 ## 2026-05-09 — v2.3-import: bulk recipe-scrape (Miljuschka, AH, 24kitchen)
 
 **Aanleiding.** Peter wil een gevulde bibliotheek voordat we filters bouwen. Doel: 100+ dineren, 100+ ontbijten, 100+ lunches.

@@ -20,7 +20,6 @@ const vs = {
   meals: [],
   q: '',
   type: '',
-  suitable: '',
   kcalMax: 900,
   kcalMaxOn: false,
   seizoen: '',
@@ -50,7 +49,6 @@ function filtered() {
     (m.ingredients || []).some(i => (i.name || '').toLowerCase().includes(q))
   );
   if (vs.type) list = list.filter(m => m.type === vs.type);
-  if (vs.suitable) list = list.filter(m => (m.suitable_for || []).includes(vs.suitable));
   if (vs.kcalMaxOn) list = list.filter(m => m.kcal != null && m.kcal <= vs.kcalMax);
   if (vs.seizoen) list = list.filter(m => (m.seizoen || []).includes(vs.seizoen));
   if (vs.tag) list = list.filter(m => (m.tags || []).includes(vs.tag));
@@ -64,13 +62,13 @@ function allTags() {
 }
 
 function clearFilters() {
-  vs.q = ''; vs.type = ''; vs.suitable = ''; vs.kcalMax = 900; vs.kcalMaxOn = false;
+  vs.q = ''; vs.type = ''; vs.kcalMax = 900; vs.kcalMaxOn = false;
   vs.seizoen = ''; vs.tag = '';
   rerender();
 }
 
 function hasFilters() {
-  return vs.q || vs.type || vs.suitable || vs.kcalMaxOn || vs.seizoen || vs.tag;
+  return vs.q || vs.type || vs.kcalMaxOn || vs.seizoen || vs.tag;
 }
 
 export function BuildView(state) {
@@ -110,22 +108,6 @@ export function BuildView(state) {
               ${SLOTS.map(s => html`
                 <button class="seg-btn icon ${vs.type === s.id ? 'is-on' : ''}" @click=${() => { vs.type = s.id; rerender(); }} title=${s.label}>
                   ${SlotIcon({ slot: s.id, size: 16 })}
-                </button>
-              `)}
-            </div>
-          </div>
-
-          <div class="rail-section">
-            <div class="cmt">// voor wie</div>
-            <div class="suitable-grid">
-              ${[
-                { id: '',        label: 'iedereen', kleur: '' },
-                { id: 'beiden',  label: 'beiden',   kleur: 'leaf' },
-                { id: 'peter',   label: 'Peter',    kleur: 'berry' },
-                { id: 'miranda', label: 'Miranda',  kleur: 'plum' },
-              ].map(s => html`
-                <button class="chip ${s.kleur} ${vs.suitable === s.id ? 'is-on' : ''}" @click=${() => { vs.suitable = s.id; rerender(); }}>
-                  ${s.label}
                 </button>
               `)}
             </div>
