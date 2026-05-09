@@ -20,8 +20,14 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
       @click=${onClick ?? (() => {})}
       ?disabled=${!onClick}
     >
-      <div class="mc-img">
-        ${FoodPh({ hue, label: `// ${namePreview}`, height: HEIGHTS[size] })}
+      <div class="mc-img" style="height:${HEIGHTS[size]}px;">
+        ${meal.image_url ? html`
+          <img class="mc-photo" src=${meal.image_url} alt=${meal.name}
+            loading="lazy" referrerpolicy="no-referrer"
+            @error=${(e) => { e.target.style.display = 'none'; e.target.parentElement.classList.add('mc-img-fallback'); }}
+          />
+        ` : nothing}
+        ${meal.image_url ? nothing : FoodPh({ hue, label: `// ${namePreview}`, height: HEIGHTS[size] })}
         ${badge ? html`<span class="mc-badge">${badge}</span>` : nothing}
         ${onToggleFavoriet ? html`
           <span class="mc-fav ${meal.favoriet ? 'is-on' : ''}"
@@ -57,7 +63,19 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
       }
       .mc:disabled { cursor: default; }
       .mc:hover .mc-img { transform: translateY(-1px); }
-      .mc-img { position: relative; transition: transform .15s ease; }
+      .mc-img {
+        position: relative;
+        transition: transform .15s ease;
+        border-radius: var(--r-md, 8px);
+        overflow: hidden;
+        background: var(--bg-2);
+      }
+      .mc-photo {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+        background: var(--bg-2);
+      }
       .mc-badge {
         position: absolute; top: 8px; right: 8px;
         background: var(--leaf); color: white;
