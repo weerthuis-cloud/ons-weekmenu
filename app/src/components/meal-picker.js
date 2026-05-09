@@ -32,6 +32,7 @@ function mealToDraft(meal, fallbackSlot = '') {
     recipe: meal?.recipe ?? '',
     description: meal?.description ?? '',
     source_url: meal?.source_url ?? '',
+    image_url: meal?.image_url ?? '',
     suitable_for: meal?.suitable_for?.length ? [...meal.suitable_for] : ['beiden'],
     ingredients: (meal?.ingredients?.length ? meal.ingredients : [null]).map(i => ({
       name: i?.name ?? '',
@@ -63,7 +64,7 @@ const ui = {
   busy: false,
   error: null,
   // draft-data voor 'create' en 'edit'
-  draft: { name: '', kcal: '', type: '', bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] },
+  draft: { name: '', kcal: '', type: '', bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', image_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] },
 };
 
 function ensureHost() {
@@ -90,7 +91,7 @@ export async function openMealPicker({ slot, suggestedSuitableFor = 'beiden', on
   ui.error = null;
   ui.onPick = onPick;
   ui.onSaved = null;
-  ui.draft = { name: '', kcal: '', type: slot, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', suitable_for: [suggestedSuitableFor], ingredients: [emptyIngredient()] };
+  ui.draft = { name: '', kcal: '', type: slot, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', image_url: '', suitable_for: [suggestedSuitableFor], ingredients: [emptyIngredient()] };
   ui.meals = [];
   rerender();
   try {
@@ -123,7 +124,7 @@ export function openMealCreator({ defaultType = 'ontbijt', onSaved } = {}) {
   ui.onSaved = onSaved;
   // Wanneer onPick null is en mode='create', behandel save als 'add then close+notify'
   ui.onPick = onSaved ? ((meal) => onSaved(meal)) : null;
-  ui.draft = { name: '', kcal: '', type: defaultType, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
+  ui.draft = { name: '', kcal: '', type: defaultType, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', image_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
   rerender();
 }
 
@@ -155,6 +156,7 @@ async function saveDraft(e) {
       recipe: ui.draft.recipe?.trim() || null,
       description: ui.draft.description?.trim() || null,
       source_url: ui.draft.source_url?.trim() || null,
+      image_url: ui.draft.image_url?.trim() || null,
       ingredients: ui.draft.ingredients
         .filter(ing => ing.name.trim())
         .map(ing => ({
@@ -348,6 +350,18 @@ function view() {
               <input type="url" placeholder="https://miljuschka.nl/..."
                 .value=${ui.draft.source_url}
                 @input=${(e) => { ui.draft.source_url = e.target.value; }} />
+            </label>
+            <label>
+              Foto-URL <span class="hint">(plak hier een afbeelding-URL voor in de bibliotheek)</span>
+              <input type="url" placeholder="https://static.ah.nl/static/recepten/..."
+                .value=${ui.draft.image_url}
+                @input=${(e) => { ui.draft.image_url = e.target.value; }} />
+              ${ui.draft.image_url ? html`
+                <img src=${ui.draft.image_url} alt="preview"
+                  style="max-height:120px; margin-top:8px; border-radius:8px; object-fit:cover;"
+                  referrerpolicy="no-referrer"
+                  @error=${(e) => { e.target.style.display = 'none'; }} />
+              ` : ''}
             </label>
             <fieldset class="ing">
               <legend>Ingrediënten <span class="hint">(naam verplicht, rest optioneel)</span></legend>
