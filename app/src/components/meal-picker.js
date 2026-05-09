@@ -2,10 +2,18 @@
 // Module-state. Mount via openMealPicker({ slot, onPick }).
 
 import { html, render } from 'lit-html';
+import { ref } from 'lit-html/directives/ref.js';
 import { listMeals, addMeal, updateMeal, softDeleteMeal } from '../lib/data.js';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { UNITS } from '../lib/units.js';
 import { SlotIcon } from './slot-icon.js';
+
+// v2.7b: auto-grow textarea zodat bereidingswijze in z'n geheel zichtbaar is, geen scrollbalk.
+function autoGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + 2) + 'px';
+}
 
 function emptyIngredient() {
   return { name: '', qty: '', unit: '' };
@@ -341,13 +349,6 @@ function view() {
                 .value=${ui.draft.source_url}
                 @input=${(e) => { ui.draft.source_url = e.target.value; }} />
             </label>
-            <label>
-              Bereidingswijze <span class="hint">(stappen, één per regel)</span>
-              <textarea rows="8" class="recipe-area"
-                placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
-                .value=${ui.draft.recipe}
-                @input=${(e) => { ui.draft.recipe = e.target.value; }}></textarea>
-            </label>
             <fieldset class="ing">
               <legend>Ingrediënten <span class="hint">(naam verplicht, rest optioneel)</span></legend>
               <div class="ing-rows">
@@ -375,6 +376,14 @@ function view() {
               </div>
               <button type="button" class="btn ghost small" @click=${addIngredientRow}>+ rij</button>
             </fieldset>
+            <label>
+              Bereidingswijze <span class="hint">(stappen, één per regel)</span>
+              <textarea class="recipe-area"
+                placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
+                .value=${ui.draft.recipe}
+                ${ref((el) => el && requestAnimationFrame(() => autoGrow(el)))}
+                @input=${(e) => { ui.draft.recipe = e.target.value; autoGrow(e.target); }}></textarea>
+            </label>
             ${ui.error ? html`<div class="err">${ui.error}</div>` : null}
             <div class="row right">
               ${isEdit ? html`
@@ -426,7 +435,14 @@ function view() {
         width: 100%;
         box-sizing: border-box;
       }
-      textarea.recipe-area { font-family: inherit; line-height: 1.5; resize: vertical; min-height: 120px; }
+      textarea.recipe-area {
+        font-family: inherit;
+        line-height: 1.5;
+        resize: none;
+        overflow: hidden;          /* geen scrollbalk; height groeit met content */
+        min-height: 80px;
+        field-sizing: content;     /* moderne browsers: passen vanzelf bij content */
+      }
       input:focus, select:focus, textarea:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
 
       .mp-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
