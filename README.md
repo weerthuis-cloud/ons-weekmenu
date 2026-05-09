@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.7** (macro-coverage van 14% naar 62% via ingredient-macros database en aggregator-functie; nutrition-cache voor ~340 ingredient-namen).
+Huidige versie: **v2.8** (foto's bij gerechten in Bibliotheek uit schema.org/Recipe.image, 418/464 dekking; bereidingswijze in meal-editor leesbaar zonder scrollbalk; macro-cellen horizontaal in weekmenu).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -33,6 +33,8 @@ Versies in volgorde:
 - v2.5 Mobile auto-scroll naar 'vandaag' in weekmenu, diëtist-bron via JOIN gemarkeerd, cuisine-coverage 38%→67% via ingrediënt-detectie — klaar
 - v2.6 Macro-targets + daily-overzicht in weekmenu, favorieten + grid/lijst toggle in Bibliotheek, rating-aggregaat per meal voor sortering, settings-modal — klaar
 - v2.7 Ingredient-macros database (343 entries) + aggregator-functie compute_meal_macros(); macro-coverage opgekrikt van 14% naar 62% — klaar
+- v2.7a–c Bereidingswijze + beschrijving + bron-URL in meal-editor; ingrediënten boven bereiding; auto-growing textarea zonder scrollbalk; macro-cellen horizontaal in 1 rij — klaar
+- v2.8 meals.image_url + re-scrape Recipe.image (418/464 dekking); meal-card toont foto met lazy-load en no-referrer — klaar
 
 ## Architectuur
 

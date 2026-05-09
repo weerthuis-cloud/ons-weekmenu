@@ -621,6 +621,34 @@ Totaal 66 tests groen.
 
 ---
 
+## 2026-05-09 — v2.7a–c + v2.8: meal-editor uitleg, macro-layout fix, foto's
+
+**v2.7a — bereidingswijze in meal-editor.** `mealToDraft` uitgebreid met `recipe`, `description`, `source_url`. Form in meal-picker kreeg drie nieuwe velden onder de Dieet-fieldset. Geen schema-wijziging — kolommen bestonden al sinds v2.3.
+
+**v2.7b — volgorde + scrollbalk weg.** Ingrediënten-fieldset verplaatst naar BOVEN de bereidingswijze (logische input → proces). Bereidings-textarea krijgt CSS `field-sizing: content` (modern browsers) en JS-fallback (`requestAnimationFrame` + `scrollHeight` via lit-html `ref`-directive). Min-height 80px, geen scrollbalk meer.
+
+**v2.7c — macro-cellen horizontaal.** `macros-row` van `flex-wrap: wrap` → `nowrap`, `.macro-cell` van `flex: 1 + min-width: 38px` → `flex: 1 1 0 + min-width: 0`. Plus mobile-fix: `.day-col .day-macros { grid-column: 1 / -1 }` zodat de macro-strook de hele dagkolom-breedte krijgt op mobiel (was beperkt tot slots-kolom).
+
+**v2.8 — foto's bij gerechten.**
+- Schema: `meals.image_url text` (nieuwe kolom).
+- Re-scrape via Chrome MCP: alle 418 source-URLs nogmaals fetched, schema.org/Recipe.image-veld geparseerd.
+- Bug-fix in image-picker: `["", "https://..."]` array (AH gebruikt dit format) — eerste lege string werd geretourneerd. Fix: skip lege strings, neem eerste niet-lege.
+- Coverage: 418/464 (90%). Diëtist-recepten (46) hebben geen image want geen externe bron.
+- Edge function `update-meal-images` (shared secret `owm-images-7f3a2b4c-temp-2026`) — kan later disabled.
+- meal-card.js: `<img>` met `loading="lazy"` + `referrerpolicy="no-referrer"` + `@error`-fallback naar FoodPh placeholder. CSS `object-fit: cover` voor consistente kaart-grootte.
+
+**AVG-overweging.** Image-URLs verwijzen naar externe sites. Browser laadt direct vanaf miljuschka.nl/static.ah.nl/24kitchen.nl bij elk renderen van Bibliotheek. `referrerpolicy="no-referrer"` voorkomt dat onze GitHub Pages-URL als referrer wordt meegestuurd. Geen tracking-pixels of cookies van bron-sites — gewone CDN-images. Acceptabel voor privé huishouden-app.
+
+**Edge functions actief (alle met shared-secret):**
+- `bulk-import-meals` (disabled stub na v2.3)
+- `update-meal-macros` (v2.7)
+- `list-source-urls` (v2.7)
+- `update-meal-images` (v2.8)
+
+Voor v2.9 of later: opruimen of consolideren tot één generieke `update-meal-fields` endpoint.
+
+---
+
 ## 2026-05-09 — v2.7: ingredient-macros database voor macro-coverage 14% → 62%
 
 **Aanleiding.** v2.6 had de UI maar 0%-data. Open Food Facts text-search was onbetrouwbaar (zoek 'kipfilet' → match 'Volkoren pasta'), Recipe.nutrition gaf alleen 64/464 (14%). Pivot naar een eigen ingredient-database met macros uit mijn voedingsmiddelen-kennis.

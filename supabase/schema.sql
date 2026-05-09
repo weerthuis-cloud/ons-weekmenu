@@ -43,6 +43,7 @@ create table if not exists public.meals (
   hoofdingredient text,                       -- v2.4: kip/rund/varken/lam/vis/vegetarisch/pasta/rijst/aardappel/brood/ei/zuivel
   dieet           text[] not null default '{}', -- v2.4: vegetarisch/vegan/glutenvrij/lactosevrij/koolhydraatarm
   favoriet        boolean not null default false, -- v2.6: gemarkeerd als favoriet in bibliotheek
+  image_url       text,                       -- v2.8: URL naar recept-foto op bron-site (Miljuschka/AH/24kitchen)
   created_by      uuid references public.profiles(id),
   created_at      timestamptz not null default now(),
   deleted_at      timestamptz null   -- soft-delete: blijft in oude weken zichtbaar, weg uit bibliotheek
