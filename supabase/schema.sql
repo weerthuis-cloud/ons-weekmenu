@@ -71,6 +71,34 @@ group by m.id;
 grant select on public.meal_ratings to authenticated;
 
 -- ============================================================
+-- v2.7: ingredient-macros nutrition-cache
+-- ============================================================
+create table if not exists public.ingredient_macros (
+  name_key       text primary key,                -- genormaliseerde naam (lowercase, geen leestekens)
+  display_name   text not null,                   -- nette weergave-naam
+  kcal_per_100g  numeric(6,1),
+  eiwit_per_100g numeric(5,1),
+  koolh_per_100g numeric(5,1),
+  vet_per_100g   numeric(5,1),
+  default_unit   text,                            -- typische unit waarop 100g slaat: g/ml/st
+  st_to_g        numeric(7,2),                    -- bij default_unit='st': hoeveel gram = 1 stuk
+  source         text not null default 'claude_kb', -- claude_kb | nevo | off | handmatig
+  created_at     timestamptz not null default now()
+);
+create index if not exists ingredient_macros_name_idx on public.ingredient_macros (name_key);
+alter table public.ingredient_macros enable row level security;
+create policy "ingredient_macros read"   on public.ingredient_macros for select using ((select auth.uid()) is not null);
+create policy "ingredient_macros insert" on public.ingredient_macros for insert with check ((select auth.uid()) is not null);
+create policy "ingredient_macros update" on public.ingredient_macros for update using ((select auth.uid()) is not null);
+
+-- v2.7: aggregator-functie. Voor elke meal zonder kcal (of all met force=true):
+-- match elk ingredient tegen ingredient_macros (exact + first-word fallback),
+-- bereken bijdrage in basis-eenheden, schaal op 100g, deel door serves voor recipe-meals.
+-- Update meal alleen als minstens 50% van de ingredients gematcht is.
+-- Aanroepen: select * from public.compute_meal_macros(false) — false = alleen lege.
+-- (functie-body staat in migratie v2_7_compute_meal_macros_fn)
+
+-- ============================================================
 -- 3. weeks  (één per persoon per week)
 -- ============================================================
 create table if not exists public.weeks (

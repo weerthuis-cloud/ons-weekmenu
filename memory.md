@@ -621,6 +621,42 @@ Totaal 66 tests groen.
 
 ---
 
+## 2026-05-09 — v2.7: ingredient-macros database voor macro-coverage 14% → 62%
+
+**Aanleiding.** v2.6 had de UI maar 0%-data. Open Food Facts text-search was onbetrouwbaar (zoek 'kipfilet' → match 'Volkoren pasta'), Recipe.nutrition gaf alleen 64/464 (14%). Pivot naar een eigen ingredient-database met macros uit mijn voedingsmiddelen-kennis.
+
+**Schema.**
+- `public.ingredient_macros` (name_key PK, display_name, kcal/eiwit/koolh/vet_per_100g, default_unit, st_to_g, source).
+- 343 entries handmatig aangelegd via SQL-INSERTs in 5 batches (oliën+zuivel, vlees+granen, brood+peulvruchten+noten, groenten, fruit+sauzen+kruiden).
+- Synoniemen apart als rij (olijfolie / milde olijfolie / extra vierge olijfolie hebben dezelfde macros maar verschillende name_keys).
+- Source = `claude_kb` (mijn algemene kennis); orde-van-grootte accuraat, niet wetenschappelijk gekalibreerd.
+
+**Aggregator-functie `compute_meal_macros(force boolean)`.**
+PL/pgSQL functie die voor elke meal:
+1. Loopt door `meals.ingredients` (jsonb-array)
+2. Normaliseert ingredient-naam (strip parens, bereiding-keywords, leestekens)
+3. Lookup tegen `ingredient_macros` op name_key, fallback op first-word
+4. Converteert qty → basis-eenheid (g/ml/st via st_to_g): el=15g, tl=5g, kg=1000g, l=1000ml, snufje=0.5g, scheut=5g
+5. Sommeert kcal/eiwit/koolh/vet
+6. Voor recipe-meals (serves > 0): deelt door serves zodat kcal staat per portie
+7. Update `meals.kcal/eiwit_g/koolh_g/vet_g` als ≥50% van de ingredients gematcht zijn
+
+**Resultaat.**
+- 4673 ingredient-rijen totaal in DB; 2482 (53%) gematcht via exact name_key
+- 286 van 464 meals (62%) volledige macros — een sprong van 14%
+
+**Steekproeven (sanity-check OK).**
+- Spicy chili con carne (4p): 639 kcal, 54g eiwit, 59g koolh, 23g vet ✓
+- Kwark met fruit en honing: 142 kcal, 23g eiwit ✓
+- Japanse souffle pancakes: 833 kcal/p — wat hoog voor pancakes, mogelijk overschat door bloem-portioning
+- Caesar-eiersalade serves=12 — verdachte recipeYield-parse, te corrigeren
+
+**Edge functions van eerdere sessies.** `update-meal-macros`, `list-source-urls`, `bulk-import-meals` zijn nog steeds actief. Geen risico (shared-secret), maar kan opgeruimd in v2.8.
+
+**Volgende stap (v2.8).** Auto-genereer-week algoritme dat 7 dagen vult met meals zodat dagtotalen binnen ±10% van targets blijven. Greedy met retries. Vereist UI-knop in WeekView.
+
+---
+
 ## 2026-05-09 — v2.6: macro-targets + favorieten + grid/lijst + rating-aggregaat
 
 **Aanleiding.** Peter wil weekmenu-samenstelling op basis van macronutriënten. Realiteitscheck: macro-coverage was 0% na de bulk-import. Re-scrape via schema.org/Recipe.nutrition gaf 64/464 (14%). Te laag voor auto-genereer-week, maar wel genoeg om de UI-structuur te bouwen zodat handmatig invullen waarde heeft.
