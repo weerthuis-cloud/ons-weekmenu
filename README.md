@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v1.4** (per-recept akkoord-flow + dag-kleurstreepjes; mobiel met swipe-navigatie tussen Week, Vandaag en Boodschappen).
+Huidige versie: **v2.3** (rating per diner, kwark-split in boodschappen, week 20 geïmporteerd, dubbele meals in bibliotheek opgeschoond).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -22,6 +22,11 @@ Versies in volgorde:
 - v1.2 boodschappenlijst rekent diner-recepten mee, geschaald op aantal eters per maaltijd — klaar
 - v1.3 per-recept akkoord-flow met checkboxes voor in-huis-items, dag-kleur tracking in lijst — klaar
 - v1.4 mobiel: horizontale swipe-navigatie tussen Week / Vandaag / Boodschappen — klaar
+- v1.5–v1.9 mobile fixes, classifier uitbreiding, recept-incompleet waarschuwing, in-huis-toggle, achterkant verstevigen (tests/backup/AVG/PWA), negeer-lijst — klaar
+- v2.0 dag-filter in boodschappenlijst — klaar
+- v2.1 CI tests gate — klaar
+- v2.2a–d UI-polish, edge-cases — klaar
+- v2.3 rating per diner (👍/neutraal/👎 met auto soft-delete bij negatief), kwark-split in boodschappen (volle ≠ magere), import week 20, cleanup van 14 duplicate meals — klaar
 
 ## Architectuur
 

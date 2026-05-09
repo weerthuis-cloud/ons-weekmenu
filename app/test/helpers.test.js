@@ -54,6 +54,24 @@ test('normalizeName behoudt slash voor varianten', () => {
   assert.equal(normalizeName('Blauwe bessen/frambozen'), 'blauwe bessen/frambozen');
 });
 
+// v2.3: kwark-split — magere en volle moeten apart blijven in boodschappen
+test('normalizeName houdt kwark volle/magere apart', () => {
+  const volle = normalizeName('Kwark, volle');
+  const magere = normalizeName('Kwark, magere');
+  assert.notEqual(volle, magere, 'volle en magere kwark moeten verschillen');
+  assert.equal(volle, 'kwark volle');
+  assert.equal(magere, 'kwark magere');
+});
+test('normalizeName houdt yoghurt halfvolle apart van volle', () => {
+  assert.notEqual(normalizeName('Yoghurt, volle'), normalizeName('Yoghurt, halfvolle'));
+});
+test('normalizeName strippt nog wel echte bereidingswoorden', () => {
+  // bereidingen blijven gestript, niet alleen vetgehalte
+  assert.equal(normalizeName('Ei, gebakken'), 'ei');
+  assert.equal(normalizeName('Biefstuk, gebakken'), 'biefstuk');
+  assert.equal(normalizeName('Honing (rauwe)'), 'honing');
+});
+
 // ============================================================
 // itemHasDayInSelection / itemQtyForSelection
 // (logic intern in views/shopping.js maar makkelijker hier los te

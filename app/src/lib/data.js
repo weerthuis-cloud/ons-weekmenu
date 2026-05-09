@@ -171,7 +171,7 @@ export async function getWeekMeals(weekId) {
   if (cache.weekMeals.has(weekId)) return cache.weekMeals.get(weekId);
   const { data, error } = await supabase
     .from('week_meals')
-    .select('id, week_id, day, slot, porties, meal:meals(*)')
+    .select('id, week_id, day, slot, porties, rating, meal_id, meal:meals(*)')
     .eq('week_id', weekId);
   if (error) throw error;
   cache.weekMeals.set(weekId, data || []);
@@ -191,7 +191,7 @@ export async function setWeekMeal({ weekId, day, slot, mealId, porties }) {
   const { data, error } = await supabase
     .from('week_meals')
     .insert({ week_id: weekId, day, slot, meal_id: mealId, porties: finalPorties })
-    .select('id, week_id, day, slot, porties, meal:meals(*)')
+    .select('id, week_id, day, slot, porties, rating, meal_id, meal:meals(*)')
     .single();
   if (error) throw error;
   cache.weekMeals.delete(weekId);
@@ -221,6 +221,48 @@ export async function setWeekMealsPorties({ ids, weekIds, porties }) {
     .in('id', ids);
   if (error) throw error;
   for (const wid of (weekIds || [])) cache.weekMeals.delete(wid);
+  notify('week_meals');
+}
+
+// v2.3: per-diner beoordeling.
+// rating: -1 (niet weer) | 0 (neutraal) | 1 (lekker) | null (geen oordeel)
+// Bij -1 wordt de gekoppelde meal soft-deleted zodat het recept uit de bibliotheek
+// verdwijnt. Bij wijzigen naar 0/1 wordt de meal automatisch hersteld als hij eerder
+// door een -1-actie was verborgen. Oude weken behouden de meal-koppeling.
+export async function setWeekMealRating({ id, weekId, mealId, rating }) {
+  if (!id) return;
+  if (rating != null && ![-1, 0, 1].includes(rating)) {
+    throw new Error(`Ongeldige rating: ${rating}`);
+  }
+  const { error } = await supabase
+    .from('week_meals')
+    .update({ rating })
+    .eq('id', id);
+  if (error) throw error;
+
+  if (mealId) {
+    if (rating === -1) {
+      // soft-delete het recept (idempotent: alleen als nog niet deleted)
+      const { error: dErr } = await supabase
+        .from('meals')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', mealId)
+        .is('deleted_at', null);
+      if (dErr) throw dErr;
+    } else if (rating === 0 || rating === 1) {
+      // restore als eerder verborgen door rating=-1 elders
+      const { error: rErr } = await supabase
+        .from('meals')
+        .update({ deleted_at: null })
+        .eq('id', mealId)
+        .not('deleted_at', 'is', null);
+      if (rErr) throw rErr;
+    }
+    cache.meals = null;
+    notify('meals');
+  }
+
+  if (weekId) cache.weekMeals.delete(weekId);
   notify('week_meals');
 }
 

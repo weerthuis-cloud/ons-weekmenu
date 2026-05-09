@@ -10,7 +10,10 @@ import { aggKey } from './units.js';
 import { classifyIngredient, categoryLabel, categoryHue, categoryOrder } from './categorie.js';
 
 // Bereidingswijzen die genegeerd worden bij groeperen ("Ei, gebakken" → "Ei").
-const BEREIDING_RE = /\b(gebakken|gekookt|gefruit|gegrild|geroosterd|gestoomd|gepocheerd|rauwe?|magere|volle|halfvolle|mager|vol|halfvol)\b/gi;
+// v2.3: vetgehalte-aanduidingen ('magere', 'volle', 'halfvolle' en kort) zitten hier
+// bewust NIET meer in. Reden: magere en volle kwark zijn aparte producten in de
+// boodschappenlijst; samenvoegen leidt tot foute aanschaffingen.
+const BEREIDING_RE = /\b(gebakken|gekookt|gefruit|gegrild|geroosterd|gestoomd|gepocheerd|rauwe?)\b/gi;
 const NAAR_KEUZE_RE = /\bnaar keuze\b/gi;
 const STORE_HINT_RE = /\bin\s+(olijfolie|boter|zonnebloemolie|water)\b/gi;
 
@@ -18,7 +21,7 @@ const STORE_HINT_RE = /\bin\s+(olijfolie|boter|zonnebloemolie|water)\b/gi;
  * Normaliseer een ingrediënt-naam voor groepering in de boodschappenlijst.
  * "Ei (omelet)" / "Ei, gebakken" / "Ei, gekookt" → "ei"
  * "Honing" / "Honing (rauwe)" → "honing"
- * "Kwark, volle" / "Kwark, magere" → "kwark"
+ * v2.3: "Kwark, volle" → "kwark volle", "Kwark, magere" → "kwark magere" (apart!)
  */
 function normalizeName(name) {
   let n = (name || '').trim();

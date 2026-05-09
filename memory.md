@@ -578,3 +578,39 @@ Totaal 66 tests groen.
 **Pending v1.1d (drag-and-drop) geschrapt.** Verplaats/ruil-knoppen in meal-detail dekken het use-case voldoende.
 
 ---
+
+## 2026-05-09 — v2.3: rating per diner + kwark-split + import week 20
+
+**Aanleiding.** Peter leverde week 20 aan (Peter + Miranda PDFs + recepten-PDF). Twee nieuwe wensen erbij: magere en volle kwark moeten apart blijven in boodschappen (waren tot nu samengevoegd door normalizeName), en per diner moet een beoordeling komen. Bij een negatieve beoordeling verdwijnt het recept uit de bibliotheek.
+
+**Schema.** `week_meals.rating smallint check (rating in (-1, 0, 1))`. Partial index op `rating is not null`. Geen breuk met bestaande data.
+
+**Cleanup vooraf (kort uit memo).** DB had 14 actief-dubbele meals door v0.7-import zonder dedupe (Ei gekookt ×2, Kaas naar keuze ×3, Kefir ×2, Kwark met honing ×2, Noten naar keuze ×3, Omelet met avocado ×2, plus Kwark met bessen ×2). Per groep canonical = laagste id. week_meals omgehangen, niet-canonical meals soft-deleted. Twee groepen vereisten handmatige stap door JSONB-key-volgorde verschil (jsonb-equality is volgorde-gevoelig).
+
+**Code-wijzigingen.**
+- `lib/shopping.js`: `BEREIDING_RE` zonder vetgehalte-aanduidingen. Voortaan: `gebakken|gekookt|gefruit|gegrild|geroosterd|gestoomd|gepocheerd|rauwe?`. Zo komen "Kwark, volle" en "Kwark, magere" als aparte items op de boodschappenlijst.
+- `lib/data.js`: `setWeekMealRating({ id, weekId, mealId, rating })`. Bij rating=-1: meal soft-delete. Bij rating in {0,1}: meal restore (deleted_at = null) als hij eerder via deze flow verborgen was. Update `getWeekMeals` en `setWeekMeal` om `rating` en `meal_id` mee te selecteren.
+- `components/meal-detail.js`: rating-chips '👍 lekker · neutraal · 👎 niet weer' bovenaan body voor diner-cellen. Toggle via dezelfde-waarde-klik = rating wissen. Bij -1 een `confirm()` met uitleg ('verbergt het recept uit bibliotheek'). State `ui.rating` + `ui.savingRating`. Initialiseert uit `wm.rating`.
+- `version.js`: v2.2d → v2.3.
+
+**Bibliotheek-filter komt automatisch.** `listMeals({ includeDeleted: false })` is al de standaard (sinds v0.5). Negatief beoordeelde recepten worden zo automatisch verborgen in BuildView (Maker), terwijl `getWeekMeals` ze nog wel toont in oude weken (join op meal_id zonder deleted_at filter).
+
+**Import week 20.**
+- 7 nieuwe gedeelde dineren met `suitable_for=['beiden']`, `serves=4`, ingredients (4-persoons hoeveelheden) en recipe (uit receptenboek-PDF): Spicy chili con carne, Quesedilla's met schnitzels, Macaroni met balletjes, Andijviestamppot met een eitje, Cannelloni met tomaten & geitenkaas, Wraps met grilled chicken & avocado, Spaghetti met zalm & groene groenten.
+- Solo-meals (ontbijt/lunch/snack_avond) per persoon: alle 28 + 28 cellen hergebruiken bestaande meals. De ingredient-hoeveelheden van de diëtist zijn week op week identiek voor de niet-diner cellen, dus geen nieuwe meal-rows. Bibliotheek blijft schoon.
+- Twee weeks-rijen voor 2026 week 20 (Peter + Miranda), source='dietist', pdf_path leeg (we hebben de PDFs niet ge-upload — kan later via app als nodig). 56 week_meals geïnsert (28 per persoon × 4 slots × 7 dagen, snack_ochtend + snack_middag leeg conform PDF).
+- Diner-week_meals krijgen porties=2 (consistent met v1.2 default voor het tweetal).
+
+**Architectonisch interessant.** De diner-recepten staan met één meal_id voor zowel Peter als Miranda. Hun week_meals refereren beide naar dezelfde meal-row. De aggregator (lib/shopping.js) doet dedup voor recipe-meals per `(day, slot, meal_id)` met MAX(porties), dus geen dubbele boodschappen. Dit is het eerste week-import waarin we het 'beiden'-pad echt gebruiken — week 19 had `suitable_for=['peter']` voor alle dineren.
+
+**Tests.** 4 nieuwe tests in `app/test/helpers.test.js`:
+- `kwark volle` ≠ `kwark magere` na normalizeName
+- `yoghurt volle` ≠ `yoghurt halfvolle`
+- bereiding-keywords blijven gestript ('Ei, gebakken' → 'ei')
+- 'Honing (rauwe)' → 'honing'
+
+**Open punt.** De rating-flow heeft nog geen *visuele indicator* in de week- of dag-view (bv. een vinkje of duim-icoon naast een gerated diner). Voor nu zie je rating alleen wanneer je de meal-detail-modal opent. Toevoegen kan later, low priority — Peter heeft eerst zelf de flow nodig.
+
+**Open punt 2.** Bij wijziging naar -1 wordt de meal soft-deleted. Maar als ditzelfde recept op een ANDERE dag in dezelfde week ook positief beoordeeld is, blijft de meal soft-deleted. Onbedoeld? Voor nu acceptabel: rating is per-meal niet per-week_meal in praktijk; bij conflict kan Peter handmatig terugzetten via 'lekker' op een andere week_meal. Bij volgende import wordt het nieuw geseed.
+
+---

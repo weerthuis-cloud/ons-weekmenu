@@ -69,11 +69,13 @@ create table if not exists public.week_meals (
   slot      text not null check (slot in ('ontbijt','snack_ochtend','lunch','snack_middag','diner','snack_avond')),
   meal_id   uuid not null references public.meals(id) on delete restrict,
   porties   numeric(3,1) not null default 1.0,
+  rating    smallint check (rating in (-1, 0, 1)),  -- v2.3: -1 niet weer, 0 neutraal, 1 lekker, null geen oordeel
   unique (week_id, day, slot)
 );
 
 create index if not exists week_meals_week_idx    on public.week_meals (week_id);
 create index if not exists week_meals_meal_id_idx on public.week_meals (meal_id);
+create index if not exists week_meals_rating_idx  on public.week_meals (rating) where rating is not null;
 
 -- ============================================================
 -- 5. shopping_lists  (één per gegenereerde lijst, met afvinkstatus)

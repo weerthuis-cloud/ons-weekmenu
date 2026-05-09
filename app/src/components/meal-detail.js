@@ -7,7 +7,7 @@ import { SLOT_BY_ID } from '../lib/slots.js';
 import { SlotIcon } from './slot-icon.js';
 import { formatQty } from '../lib/units.js';
 import { DAGEN_KORT } from '../lib/datums.js';
-import { setWeekMealsPorties } from '../lib/data.js';
+import { setWeekMealsPorties, setWeekMealRating } from '../lib/data.js';
 import { scaleRecipeIngredients } from '../lib/shopping.js';
 
 const HOST_ID = '__meal_detail_host';
@@ -27,7 +27,45 @@ const ui = {
   // v1.9b: gekozen porties voor recipe-meals (chips in modal)
   porties: 2,
   savingPorties: false,
+  // v2.3: rating voor diner-recepten
+  rating: null,
+  savingRating: false,
 };
+
+// v2.3: rating zetten/wisselen vanuit de modal
+async function setRatingFromModal(value) {
+  if (!ui.wm) return;
+  // Toggle: opnieuw klikken op dezelfde waarde zet rating terug naar null
+  const next = ui.rating === value ? null : value;
+  // Bij wisselen naar -1 (negatief): bevestiging want soft-delete recept
+  if (next === -1) {
+    const ok = confirm(
+      `"${ui.wm?.meal?.name ?? 'dit recept'}" markeren als 'niet weer'?\n\n` +
+      `Het recept wordt verborgen uit de bibliotheek (deze week blijft zichtbaar). ` +
+      `Je kunt dit ongedaan maken door later 'lekker' of 'neutraal' te kiezen.`
+    );
+    if (!ok) return;
+  }
+  ui.rating = next;
+  ui.savingRating = true;
+  rerender();
+  try {
+    await setWeekMealRating({
+      id: ui.wm.id,
+      weekId: ui.wm.week_id,
+      mealId: ui.wm.meal_id,
+      rating: next,
+    });
+    ui.wm = { ...ui.wm, rating: next };
+  } catch (err) {
+    alert('Beoordeling opslaan mislukt: ' + err.message);
+    // Revert lokale state bij fout
+    ui.rating = ui.wm?.rating ?? null;
+  } finally {
+    ui.savingRating = false;
+    rerender();
+  }
+}
 
 async function setPortiesFromModal(n) {
   if (!ui.wm) return;
@@ -118,7 +156,38 @@ export function openMealDetail({ slot, wm, onReplace, onClear, onMove, onSwap, s
   ui.mode = 'detail';
   ui.porties = Number(wm?.porties ?? (slot === 'diner' ? 2 : 1));
   ui.savingPorties = false;
+  ui.rating = wm?.rating ?? null;
+  ui.savingRating = false;
   rerender();
+}
+
+// v2.3: rating-chips voor diner-recepten (👍 lekker · neutraal · 👎 niet weer)
+function renderRatingChips() {
+  const cur = ui.rating;
+  const opts = [
+    { val: 1, label: 'lekker', icon: '👍' },
+    { val: 0, label: 'neutraal', icon: '·' },
+    { val: -1, label: 'niet weer', icon: '👎' },
+  ];
+  return html`
+    <div class="md-rating">
+      <div class="cmt">// beoordeling</div>
+      <div class="md-rating-chips">
+        ${opts.map(o => html`
+          <button
+            class="md-rating-chip ${cur === o.val ? `is-on r${o.val}` : ''}"
+            ?disabled=${ui.savingRating}
+            @click=${() => setRatingFromModal(o.val)}
+            title=${o.val === -1 ? 'verbergt het recept uit de bibliotheek' : ''}
+          >
+            <span class="rating-icon">${o.icon}</span>
+            <span class="rating-label">${o.label}</span>
+          </button>
+        `)}
+      </div>
+      ${cur === -1 ? html`<p class="cmt rating-note">// recept verborgen uit bibliotheek</p>` : nothing}
+    </div>
+  `;
 }
 
 // v1.9b: porties-chips + geschaalde ingrediëntenlijst voor diner-recepten
@@ -297,6 +366,8 @@ function view() {
         </header>
 
         <div class="md-body">
+          ${isDiner ? renderRatingChips() : nothing}
+
           ${isDiner && isRecipeMeal && ingredients.length > 0 ? renderPortionsAndScaledIngredients(meal) : nothing}
 
           ${hasIngredients ? html`
@@ -395,6 +466,26 @@ function view() {
           flex: 1;
           display: flex; flex-direction: column; gap: 14px;
         }
+
+        .md-rating { display: flex; flex-direction: column; gap: 8px; }
+        .md-rating-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+        .md-rating-chip {
+          font-family: inherit; font-size: 13px;
+          padding: 6px 12px;
+          border: 1px solid var(--line);
+          background: var(--bg);
+          color: var(--ink-2);
+          border-radius: 999px;
+          cursor: pointer;
+          display: inline-flex; align-items: center; gap: 6px;
+        }
+        .md-rating-chip:hover:not(:disabled) { border-color: var(--ink); }
+        .md-rating-chip.is-on.r1  { background: var(--leaf-tint, oklch(95% 0.04 145)); border-color: oklch(60% 0.12 145); color: oklch(30% 0.10 145); font-weight: 700; }
+        .md-rating-chip.is-on.r0  { background: var(--bg-2); border-color: var(--ink); color: var(--ink); font-weight: 700; }
+        .md-rating-chip.is-on.r-1 { background: var(--tomato-tint, oklch(95% 0.05 28)); border-color: oklch(55% 0.15 28); color: oklch(35% 0.14 28); font-weight: 700; }
+        .md-rating-chip:disabled { opacity: 0.5; cursor: wait; }
+        .md-rating-chip .rating-icon { font-size: 14px; line-height: 1; }
+        .rating-note { color: oklch(45% 0.12 28); margin-top: -2px; }
 
         .md-portions { display: flex; flex-direction: column; gap: 8px; }
         .md-portions-chips { display: flex; gap: 6px; flex-wrap: wrap; }
