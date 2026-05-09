@@ -613,4 +613,10 @@ Totaal 66 tests groen.
 
 **Open punt 2.** Bij wijziging naar -1 wordt de meal soft-deleted. Maar als ditzelfde recept op een ANDERE dag in dezelfde week ook positief beoordeeld is, blijft de meal soft-deleted. Onbedoeld? Voor nu acceptabel: rating is per-meal niet per-week_meal in praktijk; bij conflict kan Peter handmatig terugzetten via 'lekker' op een andere week_meal. Bij volgende import wordt het nieuw geseed.
 
+**Boodschappen-aggregatieregels (afspraken voor toekomstige imports).**
+- Kaas + Kaas naar keuze → samenvoegen (één rij in boodschappen). NormalizeName lost dit al op via NAAR_KEUZE_RE → strip "naar keuze". Niet wijzigen.
+- Kaas, geraspt / Geraspte kaas → blijft apart. Andere hoeveelheid, ander product. Werkt al door bestaande normalizeName.
+- Water → hoort niet op de lijst (kraan). Bij volgende PDF-import: water-rijen weglaten uit `meals.ingredients` of laat Peter ze via × in de boodschappenlijst aan zijn ignore-set toevoegen (per-device localStorage). Mogelijke v2.4-feature: hardcoded BUILTIN_IGNORED in `lib/ignored.js` zodat water cross-device weg blijft.
+- Magere vs volle kwark → apart, sinds v2.3 (BEREIDING_RE strip niet meer 'magere'/'volle'/'halfvolle').
+
 ---
