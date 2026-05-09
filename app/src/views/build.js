@@ -36,6 +36,8 @@ const HOOFD_ING = [
   ['aardappel', 'Aardappel'], ['brood', 'Brood'], ['ei', 'Ei'], ['zuivel', 'Zuivel'],
 ];
 const DIETEN = [
+  ['eiwitrijk', 'Eiwitrijk'], ['koolhydraatrijk', 'Koolhydraatrijk'],
+  ['vezelrijk', 'Vezelrijk'], ['keto', 'Keto'],
   ['vegetarisch', 'Vegetarisch'], ['vegan', 'Vegan'],
   ['glutenvrij', 'Glutenvrij'], ['lactosevrij', 'Lactosevrij'],
   ['koolhydraatarm', 'Koolhydraatarm'],

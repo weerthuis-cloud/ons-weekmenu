@@ -48,7 +48,7 @@ function mealToDraft(meal, fallbackSlot = '') {
 const PICKER_CUISINES = ['', 'italiaans', 'mexicaans', 'aziatisch', 'indiaas', 'frans', 'hollands', 'mediterraan', 'amerikaans', 'bbq'];
 const PICKER_HOOFD    = ['', 'kip', 'rund', 'varken', 'lam', 'vis', 'vegetarisch', 'pasta', 'rijst', 'aardappel', 'brood', 'ei', 'zuivel'];
 const PICKER_KOOKWIJZE= ['oven', 'airfryer', 'eenpans', 'traybake', 'wok', 'soep', 'salade', 'grill', 'pasta', 'stamppot', 'slowcooker', 'smoothie'];
-const PICKER_DIEET    = ['vegetarisch', 'vegan', 'glutenvrij', 'lactosevrij', 'koolhydraatarm'];
+const PICKER_DIEET    = ['eiwitrijk', 'koolhydraatrijk', 'vezelrijk', 'keto', 'vegetarisch', 'vegan', 'glutenvrij', 'lactosevrij', 'koolhydraatarm'];
 
 const HOST_ID = '__meal_picker_host';
 
