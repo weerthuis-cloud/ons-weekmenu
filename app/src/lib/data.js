@@ -252,6 +252,63 @@ export async function setWeekMealPorties({ id, weekId, porties }) {
 // v1.3: bulk-update porties voor meerdere records tegelijk. Voorkomt race
 // condition waarbij N losse setWeekMealPorties calls N×notify triggeren en
 // tussentijds half-bijgewerkte DB-state inlezen.
+// v2.11: auto-genereer een week op basis van filter-criteria.
+// Vult ontbijt/lunch/diner voor 7 dagen met willekeurige meals uit pool die filters matcht.
+// Bestaande hoofdmaaltijden in die week worden overschreven.
+// filters: { dieet?: string[], cuisine?: string, maxBereidingstijd?: number, alleenFavoriet?: bool, kookwijze?: string[] }
+export async function generateWeekMenu({ ownerId, year, week, filters = {} }) {
+  const meals = await listMeals();
+  const pool = meals.filter(m => {
+    if (filters.dieet?.length && !filters.dieet.every(d => (m.dieet || []).includes(d))) return false;
+    if (filters.cuisine && m.cuisine !== filters.cuisine) return false;
+    if (filters.maxBereidingstijd && m.bereidingstijd > filters.maxBereidingstijd) return false;
+    if (filters.alleenFavoriet && !m.favoriet) return false;
+    if (filters.kookwijze?.length && !filters.kookwijze.some(k => (m.kookwijze || []).includes(k))) return false;
+    return true;
+  });
+
+  // Verzeker week-rij
+  let weekRow = await getWeek(ownerId, year, week);
+  if (!weekRow) weekRow = await addWeek({ ownerId, year, week, source: 'eigen' });
+
+  const slots = ['ontbijt', 'lunch', 'diner'];
+  const inserts = [];
+  const stats = { ontbijt: 0, lunch: 0, diner: 0, mismatch: [] };
+
+  // Voorkom directe herhaling: track laatste 2 picks per slot
+  const recentPicks = { ontbijt: [], lunch: [], diner: [] };
+
+  for (let day = 1; day <= 7; day++) {
+    for (const slot of slots) {
+      const candidates = pool.filter(m => m.type === slot);
+      const fresh = candidates.filter(m => !recentPicks[slot].includes(m.id));
+      const choices = fresh.length > 0 ? fresh : candidates;
+      if (choices.length === 0) {
+        stats.mismatch.push(`${slot} dag ${day}`);
+        continue;
+      }
+      const pick = choices[Math.floor(Math.random() * choices.length)];
+      recentPicks[slot].push(pick.id);
+      if (recentPicks[slot].length > 2) recentPicks[slot].shift();
+      const porties = (slot === 'diner' && Number(pick.serves) > 0) ? 2 : 1;
+      inserts.push({ week_id: weekRow.id, day, slot, meal_id: pick.id, porties });
+      stats[slot]++;
+    }
+  }
+
+  // Wis hoofdmaaltijden in die week (snacks blijven staan)
+  await supabase.from('week_meals').delete().eq('week_id', weekRow.id).in('slot', slots);
+
+  if (inserts.length > 0) {
+    const { error } = await supabase.from('week_meals').insert(inserts);
+    if (error) throw error;
+  }
+
+  cache.weekMeals.delete(weekRow.id);
+  notify('week_meals');
+  return { weekRow, inserted: inserts.length, poolSize: pool.length, stats };
+}
+
 export async function setWeekMealsPorties({ ids, weekIds, porties }) {
   if (!ids?.length) return;
   const { error } = await supabase

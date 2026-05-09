@@ -5,6 +5,7 @@ import { DAGEN_KORT, DAGEN, todayInfo, formatWeekRange, weekDates, formatDate } 
 import { listProfiles, getWeek, addWeek, getWeekMeals, setWeekMeal, removeWeekMeal, moveWeekMeal, swapWeekMeals, onDataChange } from '../lib/data.js';
 import { openMealPicker } from '../components/meal-picker.js';
 import { openMealDetail } from '../components/meal-detail.js';
+import { openAutoGenerate } from '../components/auto-generate.js';
 import { MealCard } from '../components/meal-card.js';
 import { Sparkline } from '../components/sparkline.js';
 import { SlotIcon } from '../components/slot-icon.js';
@@ -207,6 +208,10 @@ export function WeekView(state) {
             Week ${vs.week}
           </button>
           <button class="chip" @click=${() => changeWeek(1)}>Week ${vs.week + 1 > 52 ? 1 : vs.week + 1} →</button>
+          <button class="chip ag-btn" title="Vul deze week automatisch met filter"
+            @click=${() => openAutoGenerate({ year: vs.year, week: vs.week, persoon, onDone: () => loadAll() })}>
+            ⚡ vul automatisch
+          </button>
         </div>
       </div>
 
