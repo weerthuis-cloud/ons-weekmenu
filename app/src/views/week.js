@@ -408,10 +408,10 @@ export function WeekView(state) {
         border-top: 1px dashed var(--line);
         display: flex; flex-direction: column; gap: 4px;
       }
-      .macros-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-      .macros-row .person-mini { font-family: var(--mono); font-size: 9px; color: var(--ink-3); width: 10px; }
+      .macros-row { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+      .macros-row .person-mini { font-family: var(--mono); font-size: 9px; color: var(--ink-3); width: 10px; flex: 0 0 auto; }
       .macro-cell {
-        flex: 1; min-width: 38px;
+        flex: 1 1 0; min-width: 0;
         display: flex; flex-direction: column; gap: 1px;
         padding: 3px 4px; border-radius: 4px;
         background: var(--bg-2); border: 1px solid var(--line);
@@ -436,6 +436,7 @@ export function WeekView(state) {
         .day-col { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: start; }
         .day-col .day-head { flex-direction: column; align-items: flex-start; gap: 0; margin: 0; }
         .day-col .slots { display: flex; flex-direction: column; gap: 8px; grid-column: 2; min-width: 0; }
+        .day-col .day-macros { grid-column: 1 / -1; }
         .day-head { grid-column: 1; }
         .day-head .display { font-size: 16px; }
         .day-full { display: none; }
