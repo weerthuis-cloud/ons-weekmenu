@@ -98,15 +98,25 @@ test('searchByIngredients: courgette + ei → omelet 100%, stamppot uit', () => 
   assert.equal(out[0].score, 1);
 });
 
-test('searchByIngredients: 50% match komt door, 33% niet (default minScore 0.5)', () => {
+test('searchByIngredients: ≥1 match volstaat (default minScore 0)', () => {
   seedAliases();
-  // Stamppot required: aardappel, andijvie, ui (3). Input: aardappel only → 1/3 = 33% → niet door.
+  // Stamppot required: aardappel, andijvie, ui (3). Input: aardappel only → 1/3 = 33%
+  // moet nu wel door, want minScore default = 0.
   const out33 = searchByIngredients([stamppot], ['aardappel']);
+  assert.equal(out33.length, 1);
+  assert.ok(Math.abs(out33[0].score - 1/3) < 1e-9);
+  // 0 matches → wel uitgesloten (geen restjes-kandidaat).
+  const outNone = searchByIngredients([stamppot, omeletje], ['kabeljauw']);
+  assert.equal(outNone.length, 0);
+});
+
+test('searchByIngredients: minScore filter werkt nog wel als opt-in', () => {
+  seedAliases();
+  // Met expliciete drempel 0.5: 33% wordt afgekapt, 67% niet.
+  const out33 = searchByIngredients([stamppot], ['aardappel'], { minScore: 0.5 });
   assert.equal(out33.length, 0);
-  // Input aardappel + andijvie → 2/3 = 67% → wel door.
-  const out67 = searchByIngredients([stamppot], ['aardappel', 'andijvie']);
+  const out67 = searchByIngredients([stamppot], ['aardappel', 'andijvie'], { minScore: 0.5 });
   assert.equal(out67.length, 1);
-  assert.ok(out67[0].score > 0.5);
 });
 
 test('searchByIngredients: skipt soft-deleted en verkeerde slot', () => {
@@ -131,17 +141,21 @@ test('searchByIngredients: skip-alias telt niet als required', () => {
   assert.deepEqual(out[0].matched, ['kikkererwten']);
 });
 
-test('searchByIngredients: sortering — score eerst, dan |missing|, dan naam', () => {
+test('searchByIngredients: sortering — matched DESC, dan |missing| ASC, dan naam', () => {
   seedAliases();
-  const a = { id: 'a', name: 'B-naam', type: 'diner', deleted_at: null,
-    ingredients: [{ name: 'X' }, { name: 'Y' }, { name: 'Z' }] };  // score 1/3
-  const b = { id: 'b', name: 'A-naam', type: 'diner', deleted_at: null,
-    ingredients: [{ name: 'X' }, { name: 'Y' }] };                 // score 1/2
+  // Recept met 2 matches (X, Y) komt eerst, daarna 1 match.
+  // Bij gelijk aantal matches: minder missing wint.
+  const a = { id: 'a', name: 'A2', type: 'diner', deleted_at: null,
+    ingredients: [{ name: 'X' }, { name: 'Y' }, { name: 'Z' }] };  // 2 match, 1 missing
+  const b = { id: 'b', name: 'B2', type: 'diner', deleted_at: null,
+    ingredients: [{ name: 'X' }, { name: 'Y' }] };                 // 2 match, 0 missing
   const c = { id: 'c', name: 'C-naam', type: 'diner', deleted_at: null,
-    ingredients: [{ name: 'X' }] };                                // score 1/1
-  // input X enabled minScore 0
-  const out = searchByIngredients([a, b, c], ['x'], { minScore: 0 });
-  assert.deepEqual(out.map(r => r.meal.id), ['c', 'b', 'a']);
+    ingredients: [{ name: 'X' }] };                                // 1 match, 0 missing
+  const d = { id: 'd', name: 'D-naam', type: 'diner', deleted_at: null,
+    ingredients: [{ name: 'X' }, { name: 'Q' }, { name: 'R' }] };  // 1 match, 2 missing
+  const out = searchByIngredients([a, b, c, d], ['x', 'y']);
+  // Volgorde: b (2/0), a (2/1), c (1/0), d (1/2)
+  assert.deepEqual(out.map(r => r.meal.id), ['b', 'a', 'c', 'd']);
 });
 
 test('searchByIngredients: limit cap', () => {

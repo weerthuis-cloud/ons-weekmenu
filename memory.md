@@ -988,6 +988,23 @@ Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps me
 
 ---
 
+## 2026-05-10 — v2.17.1: hotfix algoritme restjes-zoeker
+
+**Aanleiding.** Peter test op productie met input "komkommer" → 0 resultaten, terwijl 18 actieve diners komkommer bevatten. Probleem: default `minScore=0.5` was te streng. Gemiddeld diner heeft 9 niet-pantry ingrediënten; één input-ingredient geeft 1/9 ≈ 11% score, dat valt onder de drempel weg.
+
+**Diagnose.** Het algoritme prefereerde "compleet kunnen koken" boven "vinden waar mijn ingredienten in voorkomen". Voor restjes-doel hoort het tweede primair te zijn.
+
+**Wijzigingen.**
+- `searchByIngredients`: default `minScore` van 0.5 → 0. Recepten waar de score onder de drempel valt komen alsnog door zolang er ≥1 match is. Toegevoegd: harde filter `matched.length === 0` → uitsluiten (anders zou letterlijk elk diner verschijnen bij willekeurige input).
+- Sortering: primair `matched DESC` (aantal raken), secundair `missing ASC`, tertiair naam. Score blijft als info-pill in de UI maar bepaalt de volgorde niet meer.
+- UI in BuildView: drempel-slider gaat nu 0–100% met default 0 ("uit"). Tekst veranderd van "X matches ≥50%" naar "X recepten met je ingrediënten". Empty-state-tekst: "Geen diner bevat één van deze ingrediënten" i.p.v. de score-cutoff-tekst.
+
+**Tests.** Twee tests aangepast (de oude minScore-test gesplitst in 'default-uit' + 'opt-in-werkt'); sortering-test uitgebreid met 4 cases voor de nieuwe matched-DESC volgorde. 96/96 groen.
+
+**Versie.** `v2.17` → `v2.17.1`.
+
+---
+
 ## Backlog v2.18 — open punten
 
 **1. Long-tail alias-meting na een week gebruik.**

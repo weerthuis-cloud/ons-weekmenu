@@ -92,7 +92,7 @@ const vs = {
   restjesMode: false,
   restjesInput: new Set(),  // canonical-keys die de gebruiker heeft
   restjesTyping: '',
-  restjesMinScore: 0.5,
+  restjesMinScore: 0,       // v2.17.1: standaard geen score-cutoff
   restjesResults: null,     // Map<meal_id, {score, matched, missing}> | null
   topCanonicals: [],        // [{ key, count }, ...] gesorteerd op count desc — voor autocomplete
   // Sortering + view-mode
@@ -547,13 +547,13 @@ export function BuildView(state) {
               </div>
               ${vs.restjesInput.size > 0 ? html`
                 <div class="restjes-meta">
-                  <span class="cmt">${list.length} match${list.length === 1 ? '' : 'es'} ≥${Math.round(vs.restjesMinScore*100)}%</span>
+                  <span class="cmt">${list.length} recept${list.length === 1 ? '' : 'en'} met je ingrediënten</span>
                   <label class="switch">
-                    <span class="cmt">drempel</span>
-                    <input type="range" min="0.3" max="1" step="0.1"
+                    <span class="cmt">strenge match (optioneel)</span>
+                    <input type="range" min="0" max="1" step="0.1"
                       .value=${vs.restjesMinScore}
                       @input=${(e) => { vs.restjesMinScore = +e.target.value; rerender(); }} />
-                    <span class="cmt">${Math.round(vs.restjesMinScore*100)}%</span>
+                    <span class="cmt">${vs.restjesMinScore === 0 ? 'uit' : Math.round(vs.restjesMinScore*100) + '%'}</span>
                   </label>
                   <button class="btn ghost" @click=${restjesClear}>wis</button>
                 </div>
@@ -577,7 +577,7 @@ export function BuildView(state) {
               ${vs.meals.length === 0
                 ? html`<p>Bibliotheek is leeg. Klik <strong>+ recept</strong> bovenin.</p>`
                 : vs.restjesMode && vs.restjesInput.size > 0
-                  ? html`<p>Geen diner past bij deze ingrediënten met ≥${Math.round(vs.restjesMinScore*100)}% match. Probeer de drempel lager of voeg een ingrediënt toe.</p>`
+                  ? html`<p>Geen diner bevat één van deze ingrediënten. Voeg een ingrediënt toe of zet de strenge-match-drempel uit.</p>`
                   : html`<p>Geen recepten voldoen aan de filters.</p>`}
             </div>
           ` : (vs.viewMode === 'lijst' ? html`
