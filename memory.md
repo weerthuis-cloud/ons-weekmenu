@@ -987,3 +987,23 @@ Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps me
 **Versie.** `v2.16` → `v2.17`. `version.js` bijgewerkt.
 
 ---
+
+## Backlog v2.18 — open punten
+
+**1. Long-tail alias-meting na een week gebruik.**
+- Doel: de keys uit de "1-4 recepten"-tier die in productie veel als zoekinput voorkomen alsnog naar canonical mappen.
+- Hoe: query op `ingredient_aliases` (welke raw_keys hebben we al) en op `meals.ingredients` (welke raw-keys komen voor in 1-4 actieve diners). Daaruit top-100 ontbrekende kandidaten halen. Per cluster handmatig of via LLM voorstellen genereren, reviewen, in één seed-bestand toevoegen.
+- Verwacht: ~80-150 nieuwe aliases. Coverage van 40% naar ~60-70%.
+- Trigger: zodra Peter de restjes-zoeker een week gebruikt heeft en gevallen "ik typte X maar er kwam niets" rapporteert.
+
+**2. Macro-aanvulling op de bibliotheek voor v2.4-uitbreiding.**
+- Diner-macros zijn nu 51% gevuld. Bij het uitbreiden van de bibliotheek (richting 700) eerst de bestaande lege macros aanvullen via de `ingredient_macros`-pipeline (v2.7) zodat de filter "kcal-max" niet de helft uitsluit.
+- Werkpaden: `lib/ingredient-macros.js` (bestaand), draait per recept een berekening op basis van ingredient-tabel.
+
+**3. Pantry per profile.**
+- Huidige PANTRY (`lib/pantry.js`) is hardcoded. Verplaats naar `profiles.pantry text[]` met de huidige set als default. UI: editor in profiel-pagina.
+
+**4. Bibliotheek-uitbreiding.**
+- Site-research voor diner-recepten zoals besproken. Voedingscentrum, Lekker en Simpel, Brenda Kookt, Leuke Recepten, OhMyFoodness. Pas na punten 1+2 starten zodat de nieuwe data direct schoon canonical+macro krijgt.
+
+---
