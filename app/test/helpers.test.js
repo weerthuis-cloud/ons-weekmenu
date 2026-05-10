@@ -50,6 +50,13 @@ test('normalizeName strip bereiding', () => {
 test('normalizeName strip "naar keuze"', () => {
   assert.equal(normalizeName('Kaas naar keuze'), 'kaas');
 });
+// v2.14: roerei-alias zodat ei + roerei in dezelfde week samenvallen
+test('normalizeName mapt "Roerei" naar "ei"', () => {
+  assert.equal(normalizeName('Roerei'), 'ei');
+});
+test('normalizeName mapt "Roereieren" naar "ei"', () => {
+  assert.equal(normalizeName('Roereieren'), 'ei');
+});
 test('normalizeName behoudt slash voor varianten', () => {
   assert.equal(normalizeName('Blauwe bessen/frambozen'), 'blauwe bessen/frambozen');
 });

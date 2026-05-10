@@ -16,12 +16,20 @@ import { classifyIngredient, categoryLabel, categoryHue, categoryOrder } from '.
 const BEREIDING_RE = /\b(gebakken|gekookt|gefruit|gegrild|geroosterd|gestoomd|gepocheerd|rauwe?)\b/gi;
 const NAAR_KEUZE_RE = /\bnaar keuze\b/gi;
 const STORE_HINT_RE = /\bin\s+(olijfolie|boter|zonnebloemolie|water)\b/gi;
+// v2.14: aliassen die als variant van een hoofdingrediënt gemerged moeten worden.
+// "Roerei" is geen bereidingswijze in BEREIDING_RE (zelfstandig woord), dus
+// expliciet hier vertalen naar 'ei' zodat het op de boodschappenlijst samenvalt.
+const ALIAS_PAIRS = [
+  [/\broereieren\b/gi, 'ei'],
+  [/\broerei\b/gi, 'ei'],
+];
 
 /**
  * Normaliseer een ingrediënt-naam voor groepering in de boodschappenlijst.
  * "Ei (omelet)" / "Ei, gebakken" / "Ei, gekookt" → "ei"
  * "Honing" / "Honing (rauwe)" → "honing"
  * v2.3: "Kwark, volle" → "kwark volle", "Kwark, magere" → "kwark magere" (apart!)
+ * v2.14: "Roerei" / "Roereieren" → "ei"
  */
 function normalizeName(name) {
   let n = (name || '').trim();
@@ -34,10 +42,15 @@ function normalizeName(name) {
   n = n.replace(NAAR_KEUZE_RE, '');
   n = n.replace(STORE_HINT_RE, '');
 
-  // 3. Strip alle leestekens behalve / (voor "blauwe bessen/frambozen")
+  // 3. Aliassen: 'roerei' → 'ei' etc. (na de strips zodat "Roerei, gebakken" ook werkt)
+  for (const [re, repl] of ALIAS_PAIRS) {
+    n = n.replace(re, repl);
+  }
+
+  // 4. Strip alle leestekens behalve / (voor "blauwe bessen/frambozen")
   n = n.replace(/[,;]/g, '');
 
-  // 4. Whitespace normaliseren
+  // 5. Whitespace normaliseren
   n = n.replace(/\s+/g, ' ').trim();
 
   return n.toLowerCase();
@@ -91,11 +104,17 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
             store: storeKey,
             who: new Set(),
             sources: [],
+            allOptional: true,   // v2.15: blijft true zolang elke source 'naar keuze' is
           });
         }
         const g = groups.get(key);
         g.count += 1;
         const u = ing.unit ? require_unit_factor(ing.unit) : 1;
+        // v2.15: detecteer 'naar keuze' op de oorspronkelijke naam (na strip is het
+        // weg). Wanneer ALLE sources van een groep optional zijn behandelen we de
+        // groep als soft, ook als de unit concreet is (kaas naar keuze in g).
+        const isOptional = /\bnaar keuze\b/i.test(ing.name || '');
+        g.allOptional = g.allOptional && isOptional;
         let srcQty = null;
         if (ing.qty == null || ing.qty === '') {
           g.qtyMissing = true;
@@ -109,8 +128,52 @@ export function aggregateShopping(mealsByOwner, modus = 'huishouden') {
           slug, day: wm.day, slot: wm.slot,
           mealName: wm.meal?.name, originalName: ing.name,
           qty: srcQty,
+          optional: isOptional,
         });
       }
+    }
+  }
+
+  // v2.14/v2.15: zachte groepen invouwen in de qty-houdende variant met
+  // dezelfde nameKey + store. Een groep is 'soft' wanneer:
+  //   - unit ∈ ('' | 'naar_smaak'), of
+  //   - allOptional: elke source had 'naar keuze' in de raw naam (v2.15).
+  // Snufje blijft bewust géén soft-unit (concrete kleine hoeveelheid).
+  // Bij gelijke unit telt qty op. Bij verschillende unit (alleen mogelijk via
+  // de allOptional-route) telt qty NIET op — anders mengen we g en st. We
+  // markeren dan qtyMissing zodat de regel zichtbaar partial wordt en de
+  // detail-view de optionele bron kan tonen.
+  const SOFT_UNITS = new Set(['', 'naar_smaak']);
+  const isSoft = (g) => SOFT_UNITS.has(g.unit) || g.allOptional === true;
+  const byNameStore = new Map();
+  for (const [k, g] of groups) {
+    const idx = `${g.nameKey}::${g.store}`;
+    if (!byNameStore.has(idx)) byNameStore.set(idx, []);
+    byNameStore.get(idx).push(k);
+  }
+  for (const keys of byNameStore.values()) {
+    if (keys.length < 2) continue;
+    const targets = keys.filter(k => !isSoft(groups.get(k)));
+    const softs = keys.filter(k => isSoft(groups.get(k)));
+    if (targets.length === 0 || softs.length === 0) continue;
+    // Kies het qty-doel met de hoogste count (meest dominante unit deze week).
+    targets.sort((a, b) => groups.get(b).count - groups.get(a).count);
+    const target = groups.get(targets[0]);
+    for (const sk of softs) {
+      const s = groups.get(sk);
+      if (target.unit === s.unit) {
+        target.qty = (target.qty || 0) + (s.qty || 0);
+      } else {
+        // Cross-unit (alleen via allOptional): qty van soft niet optellen,
+        // maar wel als 'extra' zichtbaar maken via partial.
+        target.qtyMissing = true;
+      }
+      target.qtyMissing = target.qtyMissing || s.qtyMissing;
+      target.count += s.count;
+      for (const v of s.variants) target.variants.add(v);
+      for (const w of s.who) target.who.add(w);
+      target.sources.push(...s.sources);
+      groups.delete(sk);
     }
   }
 

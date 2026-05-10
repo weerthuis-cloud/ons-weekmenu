@@ -851,3 +851,66 @@ Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps me
 - Auto-cleanup: detectie van duplicate recepten met andere naam-spelling.
 
 ---
+
+## 2026-05-10 — v2.14: alias + soft-unit merge in boodschappenlijst
+
+**Aanleiding.** Peter signaleerde dat "Kaas" en "Kaas naar keuze" als aparte regels op de boodschappenlijst stonden, idem "Ei" en "Roerei". Boodschappen werden zo onnodig dubbel gevraagd.
+
+**Diagnose (twee verschillende oorzaken).**
+1. *Kaas / kaas naar keuze.* `normalizeName('Kaas naar keuze')` gaf al 'kaas' (test bestond), maar de groepeer-key is `nameKey::unit::store`. "Kaas naar keuze" komt zonder qty en met lege/`naar_smaak` unit binnen — dus andere unit-key, twee groepen.
+2. *Ei / roerei.* "Roerei" is geen bereidingswijze in `BEREIDING_RE` (zelfstandig woord), dus normalizeName liet 'roerei' staan. Aparte nameKey, aparte groep.
+
+**Wijzigingen in `lib/shopping.js`.**
+- `ALIAS_PAIRS` toegevoegd: regex-paren die in `normalizeName` toegepast worden ná de bereidings-/keuze-strip. Bevat `roerei` → `ei` en `roereieren` → `ei`.
+- Post-merge pas in `aggregateShopping` ná de hoofdloop: groepen met soft-unit (`'' | 'naar_smaak'`) worden ingevouwen in de qty-houdende groep met dezelfde `nameKey + store`. Bij meerdere qty-doelen wint de groep met de hoogste `count` (meest dominante unit deze week). Snufje blijft expliciet *niet* soft (concrete kleine hoeveelheid).
+- Sources, variants, who en qtyMissing-flag worden samengevoegd. `partial` valt automatisch op true via de bestaande `partial = qtyMissing && qty > 0`-logica.
+
+**Tests.**
+- `app/test/shopping.test.js`: 4 nieuwe tests — kaas+naar-keuze merge (qty=30, partial=true), ei+roerei merge (qty=5, naam "Ei"), regressie kwark magere/volle apart, regressie geraspte kaas apart.
+- `app/test/helpers.test.js`: 2 normalizeName-tests voor 'Roerei' en 'Roereieren'.
+- 75/75 tests groen lokaal.
+
+**Bewust niet gedaan.**
+- `chooseDisplayName` ongewijzigd. Als "Roerei" alleen voorkomt zonder een echte "Ei"-regel, toont de boodschappenlijst "Roerei" (omdat variants size=1). Acceptabel — Peter klaagde over dupliceren, niet over de display-naam wanneer er maar één variant is.
+- "Snufje" niet als soft-unit. Een snufje peper is een concrete eenheid, geen wildcard.
+- Generieke alias-tabel niet uitgebreid met andere paren — alleen gemelde concrete cases (roerei). Bij volgende klacht uitbreiden.
+
+**Risico/observatie.**
+- Soft-unit merge raakt ook andere "naar keuze"-items (Beleg naar keuze, Fruit naar keuze) als er ook concrete varianten zijn. Dat is bewust het beoogde gedrag. Bij vreemde merges: log via `sources` per item is intact, dus terug te traceren.
+
+**Versie.** `v2.13` → `v2.14`. `version.js` bijgewerkt.
+
+**Backup.** `outputs/shopping.v2.13.backup.js` bewaard tot deze release stabiel draait in productie.
+
+---
+
+## 2026-05-10 — v2.15: cross-unit naar-keuze merge
+
+**Aanleiding.** Live data-check op week 20 (productie Supabase) liet zien dat de v2.14-fix wel ei/roerei oplost (alle ei-rijen op `unit=st`, mergen perfect tot één regel met qty=28 st), maar de gemelde "Kaas + Kaas naar keuze" niet. In de echte data heeft Peter "Kaas" 1 st (omelet ontbijt) en Miranda "Kaas naar keuze" 3× 40 g (snack-avond). Verschillende echte units, dus de v2.14 soft-unit merge raakt deze niet.
+
+**Inzicht.** "Naar keuze" is in de regelteksten van de diëtist een semantische hint (huishouden-staple), los van of er een unit aan hangt. De juiste merge volgt de bedoeling, niet de unit.
+
+**Wijzigingen in `lib/shopping.js`.**
+- Per source een `optional`-vlag op basis van `\bnaar keuze\b` in de raw `originalName`.
+- Per groep een `allOptional`-veld dat true blijft zolang elke source optional is.
+- `isSoft(g)` in de post-merge wordt: unit ∈ ('' | 'naar_smaak') OF `allOptional === true`.
+- Merge-stap onderscheidt twee gevallen:
+  - Gelijke unit → qty optellen (zoals v2.14).
+  - Verschillende unit (alleen mogelijk via allOptional-route) → qty NIET optellen, maar `qtyMissing=true` zetten zodat de regel partial wordt en de detail-view via `sources[]` beide bronnen kan tonen.
+
+**Tests.**
+- `shopping.test.js`: 2 nieuwe tests — kaas (st) + kaas naar keuze (g) mergen tot 1 regel met qty=1, unit=st, partial=true, 4 sources; honing el + honing g (zonder 'naar keuze') blijft 2 regels.
+- 77/77 tests groen lokaal.
+
+**Effect op week 20.** Eén "Kaas"-regel met qty=1 st (Peter's omelet) en partial-flag; Miranda's 120 g zit in de sources voor de detail-view. Het ei/roerei resultaat van v2.14 blijft ongewijzigd.
+
+**Bewust niet gedaan.**
+- Generieke cross-unit qty-mix met som-string ("1 st + 120 g") niet ingebouwd. Dat raakt UI-rendering en is een aparte release.
+- Snufje blijft géén soft-unit.
+- "Naar keuze" als enige variant zonder qty-doel: geen merge, blijft eigen regel (correct).
+
+**Risico.** Een groep waarvan ALLE sources puur "naar keuze" zijn (geen concrete variant), gedraagt zich nu als allOptional. Maar zonder een non-soft target in dezelfde nameKey+store gebeurt er geen merge. Dus geen onbedoelde verdwijning.
+
+**Versie.** `v2.14` → `v2.15`. `version.js` bijgewerkt.
+
+---

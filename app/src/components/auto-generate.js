@@ -19,7 +19,7 @@ const ui = {
   open: false,
   ctx: null,    // { year, week, persoon, onDone }
   filters: { dieet: new Set(), cuisine: '', maxBereidingstijd: '', alleenFavoriet: false },
-  opties: { behoudBestaande: false, metSnacks: false, macroAware: true },
+  opties: { behoudBestaande: false, metSnacks: false, macroAware: true, perMacroTargets: false, cuisineVariatie: true },
   busy: false,
   result: null,
   error: null,
@@ -41,7 +41,7 @@ export function openAutoGenerate({ year, week, persoon, onDone }) {
   ui.open = true;
   ui.ctx = { year, week, persoon, onDone };
   ui.filters = { dieet: new Set(), cuisine: '', maxBereidingstijd: '', alleenFavoriet: false };
-  ui.opties = { behoudBestaande: false, metSnacks: false, macroAware: true };
+  ui.opties = { behoudBestaande: false, metSnacks: false, macroAware: true, perMacroTargets: false, cuisineVariatie: true };
   ui.busy = false; ui.result = null; ui.error = null;
   rerender();
 }
@@ -148,6 +148,16 @@ function view() {
               <input type="checkbox" ?checked=${ui.opties.macroAware}
                 @change=${(e) => { ui.opties.macroAware = e.target.checked; rerender(); }} />
               Verdeel kcal volgens dagdoel (25/30/30 over hoofdmaaltijden)
+            </label>
+            <label class="ag-check">
+              <input type="checkbox" ?checked=${ui.opties.perMacroTargets} ?disabled=${!ui.opties.macroAware}
+                @change=${(e) => { ui.opties.perMacroTargets = e.target.checked; rerender(); }} />
+              Ook eiwit/koolh/vet per slot binnen doel
+            </label>
+            <label class="ag-check">
+              <input type="checkbox" ?checked=${ui.opties.cuisineVariatie}
+                @change=${(e) => { ui.opties.cuisineVariatie = e.target.checked; rerender(); }} />
+              Variatie: geen tweede gerecht uit dezelfde keuken op een dag
             </label>
           </div>
 

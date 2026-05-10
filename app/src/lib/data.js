@@ -273,23 +273,37 @@ export async function generateWeekMenu({ ownerId, year, week, filters = {}, opti
 
   // Profile + macro-targets ophalen
   const { data: prof } = await supabase.from('profiles').select('*').eq('id', ownerId).single();
-  const kcalDoel = prof?.kcal_doel || null;
+  const kcalDoel  = prof?.kcal_doel || null;
+  const eiwitDoel = prof?.eiwit_g_doel ? Number(prof.eiwit_g_doel) : null;
+  const koolhDoel = prof?.koolh_g_doel ? Number(prof.koolh_g_doel) : null;
+  const vetDoel   = prof?.vet_g_doel   ? Number(prof.vet_g_doel)   : null;
 
-  // Slot-distributie: percentage van dagelijks kcal-doel
+  // Slot-distributie: percentage van dagdoel
   const SLOT_PCT = {
-    ontbijt: 0.25,
-    snack_ochtend: 0.05,
-    lunch: 0.30,
-    snack_middag: 0.05,
-    diner: 0.30,
-    snack_avond: 0.05,
+    ontbijt: 0.25, snack_ochtend: 0.05, lunch: 0.30, snack_middag: 0.05, diner: 0.30, snack_avond: 0.05,
   };
-  const TOLERANCE = 0.50; // ±50% per maaltijd is ruim genoeg om voldoende keuzes te hebben
+  const TOLERANCE = 0.50; // ±50% per maaltijd is ruim
 
-  function slotKcalRange(slot) {
+  function slotRanges(slot) {
     if (!opties.macroAware || !kcalDoel) return null;
-    const target = kcalDoel * SLOT_PCT[slot];
-    return { min: target * (1 - TOLERANCE), max: target * (1 + TOLERANCE) };
+    const pct = SLOT_PCT[slot];
+    const r = { kcal: { min: kcalDoel*pct*(1-TOLERANCE), max: kcalDoel*pct*(1+TOLERANCE) } };
+    if (opties.perMacroTargets) {
+      if (eiwitDoel) r.eiwit = { min: eiwitDoel*pct*(1-TOLERANCE), max: eiwitDoel*pct*(1+TOLERANCE) };
+      if (koolhDoel) r.koolh = { min: koolhDoel*pct*(1-TOLERANCE), max: koolhDoel*pct*(1+TOLERANCE) };
+      if (vetDoel)   r.vet   = { min: vetDoel  *pct*(1-TOLERANCE), max: vetDoel  *pct*(1+TOLERANCE) };
+    }
+    return r;
+  }
+
+  function consumed(meal) {
+    const factor = (Number(meal.serves) > 0) ? 2 : 1; // recipe-meals voor 2 eters
+    return {
+      kcal:  meal.kcal != null  ? meal.kcal  * factor : null,
+      eiwit: meal.eiwit_g != null ? meal.eiwit_g * factor : null,
+      koolh: meal.koolh_g != null ? meal.koolh_g * factor : null,
+      vet:   meal.vet_g != null   ? meal.vet_g   * factor : null,
+    };
   }
 
   let weekRow = await getWeek(ownerId, year, week);
@@ -308,30 +322,49 @@ export async function generateWeekMenu({ ownerId, year, week, filters = {}, opti
 
   const inserts = [];
   const stats = { ontbijt: 0, snack_ochtend: 0, lunch: 0, snack_middag: 0, diner: 0, snack_avond: 0, mismatch: [] };
+  // Anti-saaiheid: recente 5 picks per slot (was 2)
   const recentPicks = Object.fromEntries(slots.map(s => [s, []]));
+  const RECENT_WINDOW = 5;
 
   for (let day = 1; day <= 7; day++) {
+    const dayCuisines = new Set(); // v2.13 cuisine-variatie binnen dag
     for (const slot of slots) {
       if (occupied.has(`${day}-${slot}`)) continue;
-      const range = slotKcalRange(slot);
+      const ranges = slotRanges(slot);
       let candidates = pool.filter(m => m.type === slot);
-      if (range) {
+
+      // Macro-range filter (kcal verplicht, eiwit/koolh/vet optioneel)
+      if (ranges) {
         const inRange = candidates.filter(m => {
-          if (m.kcal == null) return true; // unknown: laat toe (anders teveel uitgesloten)
-          const kc = (Number(m.serves) > 0 ? m.kcal * 2 : m.kcal); // diner-recept × 2 porties
-          return kc >= range.min && kc <= range.max;
+          const c = consumed(m);
+          if (c.kcal == null) return true; // onbekend: laat toe
+          if (c.kcal < ranges.kcal.min || c.kcal > ranges.kcal.max) return false;
+          if (ranges.eiwit && c.eiwit != null && (c.eiwit < ranges.eiwit.min || c.eiwit > ranges.eiwit.max)) return false;
+          if (ranges.koolh && c.koolh != null && (c.koolh < ranges.koolh.min || c.koolh > ranges.koolh.max)) return false;
+          if (ranges.vet   && c.vet   != null && (c.vet   < ranges.vet.min   || c.vet   > ranges.vet.max))   return false;
+          return true;
         });
         if (inRange.length > 0) candidates = inRange;
       }
+
+      // v2.13 cuisine-variatie binnen dag
+      if (opties.cuisineVariatie && dayCuisines.size > 0) {
+        const filtered = candidates.filter(m => !m.cuisine || !dayCuisines.has(m.cuisine));
+        if (filtered.length > 0) candidates = filtered;
+      }
+
+      // Anti-saaiheid via recentPicks
       const fresh = candidates.filter(m => !recentPicks[slot].includes(m.id));
       const choices = fresh.length > 0 ? fresh : candidates;
+
       if (choices.length === 0) {
         stats.mismatch.push(`${slot} dag ${day}`);
         continue;
       }
       const pick = choices[Math.floor(Math.random() * choices.length)];
       recentPicks[slot].push(pick.id);
-      if (recentPicks[slot].length > 2) recentPicks[slot].shift();
+      if (recentPicks[slot].length > RECENT_WINDOW) recentPicks[slot].shift();
+      if (pick.cuisine) dayCuisines.add(pick.cuisine);
       const porties = (slot === 'diner' && Number(pick.serves) > 0) ? 2 : 1;
       inserts.push({ week_id: weekRow.id, day, slot, meal_id: pick.id, porties });
       stats[slot]++;
