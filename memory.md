@@ -914,3 +914,44 @@ Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps me
 **Versie.** `v2.14` → `v2.15`. `version.js` bijgewerkt.
 
 ---
+
+## 2026-05-10 — v2.16: ingredient_aliases + canonical-mapping (lemma-laag)
+
+**Aanleiding.** Peter wil een restjes-zoeker ("ik heb deze 3 ingrediënten nog in huis, welk recept past?"). Eerste meting op de bibliotheek: 220 actieve diners, 2650 ingredient-rijen, 1274 unieke `name_key`s. Long tail: 71% van die keys komt in slechts 1 recept voor. Ergst: ui-cluster (5 keys → 92 recepten), olijfolie-cluster (3 keys → 101), knoflook-cluster (2 keys → 88), ei (2), peper en zout volgordeverschil. Restjes-zoek faalt zonder lemma-laag: input "ui" matcht maar 28 van 92 ui-recepten.
+
+**Keuze.** Geen pattern-based plural-strip (te brokkelig — "kruiden"→"kruid", "garnalen"→"garnaal" werken niet via simpele regex). Wel een expliciete alias-tabel in Supabase. Alleen handmatig gecureerd voor de tier 1+2 stam (≥5 recepten = 95 keys). Long tail blijft as-is — die keys komen in zo weinig recepten voor dat de impact op zoek-coverage klein is.
+
+**Database.** Nieuwe tabel `public.ingredient_aliases (raw_key text PK, canonical_key text NULLable, source text, created_at)`. RLS: read voor authenticated, write via service-role (admin/import). `canonical_key=NULL` betekent: ingredient overslaan in zoek (parser-vuiltjes zoals 'keukenmachine'). Migratie + seed in `supabase/migrations/v2_16_ingredient_aliases.sql` en `supabase/seeds/ingredient_aliases_v2_16.sql`. ~95 entries.
+
+**Bewuste keuzes in mapping.**
+- "Rode ui" / "middelgrote uien" / "uien" → canonical `ui`. Voor inkoop blijven ze apart (de boodschappen-aggregator gebruikt deze tabel NIET, behoudt `normalizeName` uit `shopping.js`).
+- "Milde olijfolie" / "extra vierge olijfolie" → canonical `olijfolie`. Functionele inwisselbaarheid voor restjes-zoek.
+- "Kippenbouillon" / "groentebouillon" / "runderbouillon" → canonical `bouillon`. Smaak verschilt maar voor restjes-zoek pragmatisch samen.
+- "Volle melk" → canonical `melk`. "Griekse yoghurt" → `yoghurt`.
+- "Tomatenpuree" blijft eigen canonical (verwerkt product, niet ≡ tomaat).
+- "Rode peper" (groente) blijft eigen canonical (≠ specerij `peper`).
+- Parser-vuiltjes met qty/unit in de naam ('g boter', 'cm gember', 'stengels bleekselderij') gemapt naar het echte ingredient.
+- 'keukenmachine' → NULL (skip, geen ingredient).
+
+**Pantry-default voor de zoek-laag.** water, zout, peper, peper en zout, zout en peper, olijfolie, zonnebloemolie, neutrale olie, sesamolie, boter, bloem, suiker. Wordt expliciet gebruikt in v2.17 (restjes-zoek-algoritme). Niet aanpasbaar per huishouden in deze versie.
+
+**JS-laag.** Nieuwe module `app/src/lib/ingredients.js` met:
+- `setAliasMap(rows)` — vervangt de in-memory map.
+- `canonicalKey(rawName)` — eerst `normalizeName` uit shopping.js, dan alias-lookup. Returnt string, of `null` (skip), of `''` (lege input).
+- `canonicalKeysOfIngredients(ingredients)` — Set van canonical-keys voor een lijst, dedupliceert + skipt nulls.
+- `getAliasMapSize()` — diagnostiek.
+
+`lib/data.js` krijgt `loadIngredientAliases()` met cache. `clearCache()` reset deze ook.
+
+**Tests.** 9 nieuwe tests in `app/test/ingredients.test.js`. Geen wijzigingen aan bestaande tests. 86/86 groen lokaal.
+
+**Niet meegenomen in v2.16.**
+- Restjes-zoek-algoritme/UI (= v2.17).
+- Long-tail aliases (>1 recept): later, eventueel via LLM-pas op nieuwe import-batches.
+- Pantry per huishouden in profile.
+
+**Versie.** `v2.15` → `v2.16`. `version.js` bijgewerkt.
+
+**Migratie + seed nog niet toegepast op productie.** Wacht op akkoord van Peter voor `apply_migration` op project `domorqjzpaytpitvloeg`.
+
+---

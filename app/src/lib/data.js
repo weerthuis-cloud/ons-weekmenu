@@ -8,6 +8,7 @@ const cache = {
   profilesBySlug: null,   // { peter: {...}, miranda: {...} }
   weeks: new Map(),       // key: `${ownerId}-${year}-${week}` → week-row
   weekMeals: new Map(),   // key: weekId → array van rows
+  ingredientAliases: null, // v2.16: lijst { raw_key, canonical_key }
 };
 
 const listeners = new Set();
@@ -26,6 +27,7 @@ export function clearCache() {
   cache.profilesBySlug = null;
   cache.weeks.clear();
   cache.weekMeals.clear();
+  cache.ingredientAliases = null;
 }
 
 // ============================================================
@@ -127,6 +129,19 @@ export async function softDeleteMeal(id) {
   if (error) throw error;
   cache.meals = null;
   notify('meals');
+}
+
+// ============================================================
+// Ingredient-aliases (v2.16) — canonical-mapping voor receptzoek
+// ============================================================
+export async function loadIngredientAliases() {
+  if (cache.ingredientAliases) return cache.ingredientAliases;
+  const { data, error } = await supabase
+    .from('ingredient_aliases')
+    .select('raw_key, canonical_key');
+  if (error) throw error;
+  cache.ingredientAliases = data || [];
+  return cache.ingredientAliases;
 }
 
 // ============================================================
