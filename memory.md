@@ -954,4 +954,36 @@ Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps me
 
 **Migratie + seed nog niet toegepast op productie.** Wacht op akkoord van Peter voor `apply_migration` op project `domorqjzpaytpitvloeg`.
 
+**Update na akkoord (10 mei 2026):** migratie en seed toegepast. 95 alias-rijen in productie. Impactcheck: 1054 van 2650 ingredient-rijen (40%) loopt nu via canonical-mapping; 1274 unieke raw_keys → 1238 unieke canonicals (36 keys samengevouwen).
+
+---
+
+## 2026-05-10 — v2.17: restjes-zoeker MVP in BuildView
+
+**Aanleiding.** Tweede helft van Peters wens uit deze sessie: aan het eind van de week blijven er regelmatig ingrediënten over en hij wil daar een diner bij vinden. v2.16 heeft de canonical-mapping gelegd; v2.17 is het feature dat erop draait.
+
+**Architectuur.** Drie nieuwe lib-modules + UI-uitbreiding in `views/build.js`. Geen nieuwe view of routing.
+- `lib/pantry.js` — exporteert hardcoded `PANTRY` Set en `isPantry()`. 12 keys: water, zout/peper-combos, oliesoorten, boter, bloem, suiker. v2.18+: aanpasbaar in profile.
+- `lib/recipe-search.js` — pure `searchByIngredients(meals, inputKeys, opts)` en `recipeCanonicalSet(meal)`. Score = matched / required, waarbij required = canonical keys ∖ pantry. Sortering: score desc, dan |missing| asc, dan naam.
+- `lib/ingredients.js` (uit v2.16) — `canonicalKey()` en `canonicalKeysOfIngredients()` worden hier gebruikt.
+
+**UI-integratie in BuildView.**
+- Toggle in de filter-rail "🍳 Restjes-modus" met counter zodra ingrediënten ingevoerd.
+- Wanneer aan: chips-bar boven de results met de ingevoerde canonical-keys (klikbaar voor remove), input met `<datalist>` autocomplete uit `topCanonicals` (top-200 niet-pantry keys gesorteerd op aantal recepten waarin ze voorkomen — eenmalig berekend bij `loadAll()`).
+- Bij ≥1 ingrediënt: de andere filters (slot, cuisine, kookwijze, etc.) worden eerst toegepast, daarna `searchByIngredients` op het resultaat. Alleen `slot='diner'` (de bibliotheek-pijn zit daar).
+- Drempel-slider (0.3–1.0, default 0.5).
+- Per match in lijst- of grid-view: pill met match-percentage en strip "nog nodig: X, Y" (of "alles in huis ✓").
+
+**Bootstrap.** `main.js` roept `loadIngredientAliases()` aan bij `auth.status === 'ready'` en zet via `setAliasMap()` de map in `lib/ingredients.js`. RLS vereist `authenticated`, dus deze volgorde is verplicht.
+
+**Niet meegenomen.**
+- Geen score-cutoff per slot — alleen diner.
+- Geen pantry-aanpassing in profile (komt later).
+- Geen weging op hoofdingredient (alle ingrediënten tellen gelijk).
+- Match-strip toont canonical-keys in lower-case zoals ze in de alias-map staan; geen mooi gepresenteerde labels (verbetering voor v2.18).
+
+**Tests.** 9 nieuwe in `app/test/recipe-search.test.js` (lege input, score-berekening, slot-filter, deleted skip, skip-alias, sortering, limit cap). 95/95 totaal groen.
+
+**Versie.** `v2.16` → `v2.17`. `version.js` bijgewerkt.
+
 ---

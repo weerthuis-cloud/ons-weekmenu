@@ -10,6 +10,10 @@ import { openMealEditor, openMealCreator } from '../components/meal-picker.js';
 import { MealCard } from '../components/meal-card.js';
 import { SlotIcon } from '../components/slot-icon.js';
 import { rerender } from '../main.js';
+// v2.17: restjes-zoeker
+import { canonicalKey, canonicalKeysOfIngredients } from '../lib/ingredients.js';
+import { searchByIngredients } from '../lib/recipe-search.js';
+import { PANTRY } from '../lib/pantry.js';
 
 const SEIZOENEN = [
   { id: 'lente',  label: 'Lente',  hue: 145 },
@@ -84,6 +88,13 @@ const vs = {
   seizoen: '',
   tag: '',
   favorietOnly: false,      // v2.6: alleen favorieten
+  // v2.17: restjes-zoeker
+  restjesMode: false,
+  restjesInput: new Set(),  // canonical-keys die de gebruiker heeft
+  restjesTyping: '',
+  restjesMinScore: 0.5,
+  restjesResults: null,     // Map<meal_id, {score, matched, missing}> | null
+  topCanonicals: [],        // [{ key, count }, ...] gesorteerd op count desc — voor autocomplete
   // Sortering + view-mode
   sortBy: 'name',
   viewMode: 'grid',         // 'grid' | 'lijst'
@@ -104,8 +115,50 @@ async function loadAll() {
     vs.meals = meals;
     vs.ratings = {};
     for (const r of ratings) vs.ratings[r.meal_id] = { count: r.rating_count, avg: r.rating_avg };
+    vs.topCanonicals = computeTopCanonicals(meals);
   } catch (err) { vs.error = err.message; }
   finally { vs.loading = false; rerender(); }
+}
+
+// v2.17: tel canonical-keys over alle (niet-pantry) ingredienten in alle
+// niet-deleted diners. Gebruikt voor autocomplete-suggesties.
+function computeTopCanonicals(meals) {
+  const counts = new Map();
+  for (const m of (meals || [])) {
+    if (m?.deleted_at) continue;
+    if (m?.type !== 'diner') continue;
+    const set = canonicalKeysOfIngredients(m.ingredients || []);
+    for (const k of set) {
+      if (!k || PANTRY.has(k)) continue;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+// v2.17: voeg een ingrediënt toe aan de restjes-input (als canonical-key).
+function restjesAdd(rawOrCanonical) {
+  const k = canonicalKey(rawOrCanonical);
+  if (!k) return;
+  vs.restjesInput.add(k);
+  vs.restjesTyping = '';
+  rerender();
+}
+function restjesRemove(key) {
+  vs.restjesInput.delete(key);
+  rerender();
+}
+function restjesClear() {
+  vs.restjesInput.clear();
+  vs.restjesTyping = '';
+  rerender();
+}
+function restjesToggle() {
+  vs.restjesMode = !vs.restjesMode;
+  if (!vs.restjesMode) restjesClear();
+  rerender();
 }
 
 async function toggleFavoriet(meal) {
@@ -248,12 +301,42 @@ function applyType(list) {
   return list.filter(m => slotMatches(vs.type, m.type));
 }
 
+// v2.17: hulp-template voor match-info onder een meal-row in lijst-modus.
+function matchInfo(match) {
+  if (!match) return '';
+  return html`
+    <div class="match-strip ml-strip">
+      <span class="match-pill">${Math.round(match.score*100)}%</span>
+      ${match.missing.length === 0
+        ? html`<span class="cmt match-ok">alles in huis ✓</span>`
+        : html`<span class="cmt">nog nodig: ${match.missing.join(', ')}</span>`}
+    </div>
+  `;
+}
+
 export function BuildView(state) {
   ensureInit();
   // Filter + sort. Slot-filter doet aparte grouping voor tussendoortjes.
   let list = applyFiltersExcept(null);
   list = applyType(list);
-  list = sorted(list);
+
+  // v2.17: in restjes-modus matchen op canonical-keys en sorteren op score.
+  // De andere filters zijn al toegepast op `list`, dus we matchen alleen op
+  // wat er na filters overblijft.
+  let restjesResultsMap = null;
+  if (vs.restjesMode && vs.restjesInput.size > 0) {
+    const results = searchByIngredients(list, [...vs.restjesInput], {
+      slot: 'diner',
+      minScore: vs.restjesMinScore,
+      limit: 200,
+    });
+    restjesResultsMap = new Map();
+    for (const r of results) restjesResultsMap.set(r.meal.id, r);
+    list = results.map(r => r.meal);
+  } else {
+    list = sorted(list);
+  }
+
   const tags = allTags();
 
   return html`
@@ -281,6 +364,17 @@ export function BuildView(state) {
             <div class="cmt">// zoek</div>
             <input type="search" class="search" placeholder="naam of ingrediënt…"
               .value=${vs.q} @input=${(e) => { vs.q = e.target.value; rerender(); }} />
+          </div>
+
+          <div class="rail-section">
+            <button class="chip ${vs.restjesMode ? 'is-on' : ''} restjes-chip"
+              @click=${restjesToggle}
+              title="Zoek diners op basis van wat je nog in huis hebt">
+              🍳 Restjes-modus
+              ${vs.restjesMode && vs.restjesInput.size > 0
+                ? html`<span class="count">${vs.restjesInput.size}</span>`
+                : nothing}
+            </button>
           </div>
 
           <div class="rail-section">
@@ -417,6 +511,60 @@ export function BuildView(state) {
         </aside>
 
         <div class="results">
+          ${vs.restjesMode ? html`
+            <div class="restjes-bar">
+              <div class="restjes-bar-head">
+                <div>
+                  <div class="cmt">// restjes-modus</div>
+                  <div class="restjes-title">Wat heb je nog in huis?</div>
+                </div>
+                <div class="cmt restjes-help">
+                  Tikkel ingrediënten in. Pantry (olie, boter, peper&amp;zout, …) wordt automatisch meegerekend.
+                </div>
+              </div>
+              <div class="restjes-chips">
+                ${[...vs.restjesInput].sort().map(k => html`
+                  <button class="chip is-on" @click=${() => restjesRemove(k)}
+                    title="verwijder ${k}">
+                    ${k} <span class="x">✕</span>
+                  </button>
+                `)}
+                <input class="restjes-input" placeholder="typ ingrediënt…"
+                  list="restjes-suggesties"
+                  .value=${vs.restjesTyping}
+                  @input=${(e) => { vs.restjesTyping = e.target.value; }}
+                  @change=${(e) => { if (e.target.value.trim()) restjesAdd(e.target.value); }}
+                  @keydown=${(e) => {
+                    if (e.key === 'Enter' && vs.restjesTyping.trim()) {
+                      restjesAdd(vs.restjesTyping);
+                      e.preventDefault();
+                    }
+                  }} />
+                <datalist id="restjes-suggesties">
+                  ${vs.topCanonicals.slice(0, 200).map(c =>
+                    html`<option value=${c.key}>${c.key} · ${c.count} recepten</option>`)}
+                </datalist>
+              </div>
+              ${vs.restjesInput.size > 0 ? html`
+                <div class="restjes-meta">
+                  <span class="cmt">${list.length} match${list.length === 1 ? '' : 'es'} ≥${Math.round(vs.restjesMinScore*100)}%</span>
+                  <label class="switch">
+                    <span class="cmt">drempel</span>
+                    <input type="range" min="0.3" max="1" step="0.1"
+                      .value=${vs.restjesMinScore}
+                      @input=${(e) => { vs.restjesMinScore = +e.target.value; rerender(); }} />
+                    <span class="cmt">${Math.round(vs.restjesMinScore*100)}%</span>
+                  </label>
+                  <button class="btn ghost" @click=${restjesClear}>wis</button>
+                </div>
+              ` : html`
+                <div class="restjes-hint cmt">
+                  Begin met typen of kies uit suggesties. Bij ≥1 ingrediënt zie je passende diners.
+                </div>
+              `}
+            </div>
+          ` : nothing}
+
           <div class="results-head">
             <div class="cmt">${list.length} van ${vs.meals.length} maaltijden</div>
             ${vs.loading ? html`<div class="cmt">laden…</div>` : ''}
@@ -428,16 +576,22 @@ export function BuildView(state) {
             <div class="empty">
               ${vs.meals.length === 0
                 ? html`<p>Bibliotheek is leeg. Klik <strong>+ recept</strong> bovenin.</p>`
-                : html`<p>Geen recepten voldoen aan de filters.</p>`}
+                : vs.restjesMode && vs.restjesInput.size > 0
+                  ? html`<p>Geen diner past bij deze ingrediënten met ≥${Math.round(vs.restjesMinScore*100)}% match. Probeer de drempel lager of voeg een ingrediënt toe.</p>`
+                  : html`<p>Geen recepten voldoen aan de filters.</p>`}
             </div>
           ` : (vs.viewMode === 'lijst' ? html`
             <div class="meal-list">
               ${list.map(m => {
                 const r = vs.ratings[m.id];
+                const match = restjesResultsMap?.get(m.id);
                 return html`
                   <button class="ml-row" @click=${() => openMealEditor({ meal: m, onSaved: () => loadAll() })}>
                     <span class="ml-fav ${m.favoriet ? 'is-on' : ''}" @click=${(e) => { e.stopPropagation(); toggleFavoriet(m); }}>${m.favoriet ? '★' : '☆'}</span>
-                    <span class="ml-name">${m.name}</span>
+                    <span class="ml-name">
+                      ${m.name}
+                      ${match ? html`<span class="match-pill">${Math.round(match.score*100)}%</span>` : ''}
+                    </span>
                     <span class="ml-meta">
                       ${m.cuisine ? html`<span class="cmt">${m.cuisine}</span>` : ''}
                       ${m.bereidingstijd ? html`<span class="cmt">${m.bereidingstijd}m</span>` : ''}
@@ -445,18 +599,34 @@ export function BuildView(state) {
                       ${r?.count ? html`<span class="cmt">★${Number(r.avg).toFixed(1)}</span>` : ''}
                     </span>
                   </button>
+                  ${match ? matchInfo(match) : ''}
                 `;
               })}
             </div>
           ` : html`
             <div class="meal-grid">
-              ${list.map(m => MealCard({
-                meal: m,
-                size: 'md',
-                showMacros: true,
-                onClick: () => openMealEditor({ meal: m, onSaved: () => loadAll() }),
-                onToggleFavoriet: toggleFavoriet,
-              }))}
+              ${list.map(m => {
+                const match = restjesResultsMap?.get(m.id);
+                return html`
+                  <div class="match-wrap">
+                    ${MealCard({
+                      meal: m,
+                      size: 'md',
+                      showMacros: true,
+                      onClick: () => openMealEditor({ meal: m, onSaved: () => loadAll() }),
+                      onToggleFavoriet: toggleFavoriet,
+                    })}
+                    ${match ? html`
+                      <div class="match-strip">
+                        <span class="match-pill">${Math.round(match.score*100)}%</span>
+                        ${match.missing.length === 0
+                          ? html`<span class="cmt match-ok">alles in huis ✓</span>`
+                          : html`<span class="cmt">nog nodig: ${match.missing.join(', ')}</span>`}
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              })}
             </div>
           `)}
         </div>
@@ -554,6 +724,58 @@ export function BuildView(state) {
         .lv-grid { grid-template-columns: 1fr; }
         .filter-rail { position: static; max-height: none; }
       }
+
+      /* v2.17 — restjes-modus */
+      .restjes-chip { width: 100%; justify-content: center; padding: 8px 12px; }
+      .restjes-bar {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--r-lg);
+        padding: 16px 18px;
+        margin-bottom: 18px;
+        display: flex; flex-direction: column; gap: 12px;
+      }
+      .restjes-bar-head {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
+      }
+      .restjes-title { font-weight: 600; font-size: 18px; line-height: 1.2; }
+      .restjes-help { max-width: 360px; line-height: 1.4; }
+      .restjes-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .restjes-chips .chip .x { opacity: 0.7; margin-left: 2px; }
+      .restjes-input {
+        font: inherit; padding: 6px 10px; border-radius: 999px;
+        border: 1px dashed var(--line-2); background: var(--bg-2); color: var(--ink);
+        min-width: 180px; flex: 1 1 180px;
+      }
+      .restjes-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+      .restjes-meta .switch { gap: 8px; }
+      .restjes-meta input[type="range"] { width: 120px; accent-color: var(--ink); }
+      .restjes-hint { font-size: 11px; }
+
+      .match-wrap { display: flex; flex-direction: column; gap: 6px; }
+      .match-strip {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 10px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--r-md);
+        font-size: 12px;
+      }
+      .ml-strip {
+        margin-left: 38px;
+        margin-bottom: 4px;
+        border-radius: 0 0 var(--r-md) var(--r-md);
+        border-top: none;
+        background: var(--bg-2);
+      }
+      .match-pill {
+        background: var(--ink); color: var(--bg);
+        padding: 2px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 700; font-family: var(--mono);
+      }
+      .match-ok { color: oklch(45% 0.14 145); font-weight: 600; }
+      .ml-name .match-pill { margin-left: 8px; vertical-align: middle; }
     </style>
   `;
 }

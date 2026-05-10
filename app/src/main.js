@@ -7,6 +7,8 @@ import { PasswordRecoveryView } from './views/password-recovery.js';
 import { initRouter, getRoute } from './router.js';
 import { initAuth, onAuthChange, getAuthState, signOut } from './lib/auth.js';
 import { todayInfo } from './lib/datums.js';
+import { loadIngredientAliases } from './lib/data.js';
+import { setAliasMap } from './lib/ingredients.js';
 
 // v1.8 + v2.2: registreer service worker voor offline-cache.
 // Version-query forceert browser om sw.js opnieuw te fetchen bij release-bump,
@@ -100,6 +102,12 @@ onAuthChange((auth) => {
       localStorage.setItem('weekmenu.persoon', auth.profile.slug);
       localStorage.setItem('weekmenu.persoon-set', '1');
     }
+  }
+  // v2.17: laad ingredient-aliases zodra we ingelogd zijn (RLS vereist authenticated).
+  if (auth.status === 'ready') {
+    loadIngredientAliases()
+      .then(rows => setAliasMap(rows))
+      .catch(err => console.warn('ingredient_aliases load failed:', err));
   }
   rerender();
 });
