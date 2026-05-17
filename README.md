@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.8** (foto's bij gerechten in Bibliotheek uit schema.org/Recipe.image, 418/464 dekking; bereidingswijze in meal-editor leesbaar zonder scrollbalk; macro-cellen horizontaal in weekmenu).
+Huidige versie: **v2.21.1** (Philips SteamFry-aanvulling: +30 airfryer-recepten uit Foodies Magazine + 2 handmatige Philips 5000-recepten met expliciete SteamFry-instellingen. 836 actief, 582 diners, 71 airfryer-recepten waarvan 5 met stoomfunctie).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar

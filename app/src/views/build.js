@@ -29,8 +29,8 @@ const CUISINES = [
   ['mediterraan', 'Mediterraan'], ['amerikaans', 'Amerikaans'], ['bbq', 'BBQ'],
 ];
 const KOOKWIJZES = [
-  ['oven', 'Oven'], ['airfryer', 'Airfryer'], ['eenpans', 'Eenpans'],
-  ['traybake', 'Traybake'], ['wok', 'Wok'], ['soep', 'Soep'],
+  ['oven', 'Oven'], ['airfryer', 'Airfryer'], ['airfryer-stoom', 'Airfryer + stoom'],
+  ['eenpans', 'Eenpans'], ['traybake', 'Traybake'], ['wok', 'Wok'], ['soep', 'Soep'],
   ['salade', 'Salade'], ['grill', 'Grill'], ['pasta', 'Pasta'],
   ['stamppot', 'Stamppot'], ['slowcooker', 'Slowcooker'], ['smoothie', 'Smoothie'],
 ];
@@ -215,7 +215,12 @@ function applyFiltersExcept(except) {
     if (except !== 'bron' && vs.bron && bronOf(m) !== vs.bron) return false;
     if (except !== 'kooktijdBucket' && vs.kooktijdBucket && !bucketMatches(vs.kooktijdBucket, m.bereidingstijd)) return false;
     if (except !== 'kcal' && vs.kcalMaxOn && (m.kcal == null || m.kcal > vs.kcalMax)) return false;
-    if (except !== 'seizoen' && vs.seizoen && !(m.seizoen || []).includes(vs.seizoen)) return false;
+    // v2.17.2: meals zonder seizoen-tag = jaarrond, altijd zichtbaar bij elke seizoen-filter.
+    // Alleen meals MET een expliciete seizoen-set worden uitgefilterd als dat seizoen niet matcht.
+    if (except !== 'seizoen' && vs.seizoen) {
+      const s = m.seizoen || [];
+      if (s.length > 0 && !s.includes(vs.seizoen)) return false;
+    }
     if (except !== 'tag' && vs.tag && !(m.tags || []).includes(vs.tag)) return false;
     if (except !== 'favoriet' && vs.favorietOnly && !m.favoriet) return false;
     return true;

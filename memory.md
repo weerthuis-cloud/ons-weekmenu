@@ -1024,3 +1024,199 @@ Lage cuisine-coverage komt omdat namen niet altijd cultureel zijn (bv. 'Wraps me
 - Site-research voor diner-recepten zoals besproken. Voedingscentrum, Lekker en Simpel, Brenda Kookt, Leuke Recepten, OhMyFoodness. Pas na punten 1+2 starten zodat de nieuwe data direct schoon canonical+macro krijgt.
 
 ---
+
+## 2026-05-16 — v2.17.2 (week 21 import + seizoenen-filter fix)
+
+**Gedaan.**
+- Week 21 (18-24 mei 2026) ingevoerd voor Peter en Miranda via Cowork+MCP.
+- 7 nieuwe diner-meals in bibliotheek, allen `suitable_for=['beiden']`, `serves=4`, met recipe, ingredients (jsonb uit PDF), bereidingstijd, source_url, image_url uit AH Allerhande og:image. Diner-namen: Griekse ovenschotel, Tagliatelle met aubergine & feta, Aardappel-aspergesalade met ei, Gele curry met rijst & wortel, Sweet 'n' sour chicken met noedels, Mexicaanse bonenschotel met cheddar, Kabeljauwstoof met pompoen.
+- 42 solo-meals voor ontbijt/lunch/snack_avond (7 dagen × 2 personen × 3 slots). Geen hergebruik over weken; per slot/dag een eigen meal, consistent met week 20.
+- 56 week_meals-koppelingen (42 solo met porties=1 + 14 diner met porties=2 voor beide personen).
+- Kcal voor diners overgenomen uit AH Allerhande nutrition (605/665/525/615/580/560/415 per portie). compute_meal_macros() bleek de diners onder te schatten doordat de ingredient_macros niet matchen op specifieke item-namen ("Pommes rouges", "Verse pompoenstukjes", verse tagliatelle).
+- Tussendoor 1 en Tussendoor 2 in de PDF zijn leeg gelaten, conform diëtist-schema. Niet ingevuld in week_meals.
+
+**Beslissingen.**
+
+1. **Lookup-marker via description tijdelijk gezet als 'WK21_LOOKUP_*'** om in twee SQL-stappen meals en week_meals te kunnen koppelen op (slug, dag, slot). Daarna gecleand. Voor toekomstige bulk-imports kan dit patroon hergebruikt worden, of beter via een import-script in `lib/import.js` (nog niet bestaand).
+
+2. **Image-fetch via Chrome MCP + JS fetch() vanuit ah.nl-context.** WebFetch gaf alleen URL terug (AH is client-rendered). Chrome MCP loste dat op: één tab op ah.nl, daar 7× fetch() naar de receptpagina's, og:image meta-tag via regex. Snel, geen CORS-issues, geen extra MCPs nodig.
+
+3. **AH-nutrition als bron voor diner-kcal.** Reden: compute_meal_macros() kon 4 van 7 diners niet juist berekenen door ontbrekende ingredient_macros voor diëtist-specifieke ingrediënten. AH heeft kcal als JSON-veld `calories` in de pagina-HTML. Toekomst: scrape-script voor nutrition kan onderdeel worden van de bulk-import (parallel aan de Recipe.image scrape uit v2.3-import).
+
+**Kcal-rapport week 21 (per dag, per persoon).**
+
+| Dag | Peter | Miranda |
+| --- | ----: | ------: |
+| Ma  | 1472  | 1753 |
+| Di  | 1595  | 1708 |
+| Wo  | 1514  | 1669 |
+| Do  | 1280  | 1775 |
+| Vr  | 1410  | 1550 |
+| Za  | 1786  | 1490 |
+| Zo  | 1394  | 1364 |
+| Som | 10451 | 11309 |
+| Gem | 1493  | 1616 |
+
+Caveats:
+- Tussendoor 1 en 2 niet ingevuld in het schema (diëtist liet leeg).
+- "Beleg voor 2 sneetjes", "Groente naar keuze", "Noten naar keuze" zijn samengestelde items met geschatte kcal (resp. ~150, ~50, ~600/100g). Werkelijke waarde varieert per keuze.
+- Diner-kcal is per portie, week_meal heeft porties=2 maar voor de telling per persoon is dat 1 portie (samen 2 porties uit serves=4 recept = halve uitvoering).
+
+**Seizoenen-filter fix (`views/build.js`).**
+
+Probleem: 506 van 513 actieve meals hebben `seizoen='{}'` (lege array). Filter-regel sloot ze allemaal uit zodra een seizoen werd gekozen, omdat `[].includes(x)` altijd false geeft. Alleen mijn 7 nieuwe diners hebben een seizoen-tag.
+
+Fix: meals met een lege seizoen-array worden behandeld als "jaarrond" en blijven altijd zichtbaar bij elke seizoen-filter. Alleen meals MET een seizoen-set worden uitgefilterd als hun seizoen niet matcht. Eén regel in `applyFilters` aangepast (regel 218 → 4 regels). Counts in `chipCount` zijn ongewijzigd gelaten: die tonen alleen seizoen-specifieke meals, wat juist informatief is om te zien hoeveel "echte" seizoensgerechten er per seizoen zijn.
+
+Backlog: seizoen-tagging op de bestaande 506 meals zou de filter pas écht waardevol maken. Geen werk voor nu, maar bij volgende bibliotheek-uitbreiding meenemen (zie ook v2.18 backlog punt 4).
+
+---
+
+## 2026-05-16 — v2.18 (HelloFresh bulk-import + foto-dekking solo-meals)
+
+**Site-onderzoek (mei 2026).** Vijf nieuwe receptsites onderzocht voor de bibliotheek-uitbreiding: HelloFresh, 15gram, Kookmutsjes, Chickslovefood, Smulweb. Ranking op (a) datakwaliteit (schema.org/Recipe JSON-LD), (b) volledigheid (kcal, ingredients, instructions, foto), (c) scrape-baarheid (geen Cloudflare/SPA-block).
+- HelloFresh nr 1: volledig server-rendered, schema.org/Recipe met `recipeIngredient`, `recipeInstructions` (HTML-formatted), `totalTime`, `recipeYield`, en volledige `nutrition` (calories/protein/carb/fat). Beperking: recipeYield is 2 personen (box-georiënteerd), ingredients hebben "stuk(s)" en "zakje(s)" notatie.
+- 15gram nr 2: server-rendered, og:type=recipe, maar GEEN schema.org/Recipe JSON-LD; nutrition staat als HTML-text (1 van de 11 recepten had werkende kcal). Niet bruikbaar voor de huidige kcal-pipeline.
+- Kookmutsjes: 800+ recepten, server-rendered, mooie og:image, maar GEEN voedingswaarden op recept-pagina.
+- Chickslovefood: focus op "5 or less" en "10 minuten"; geen kcal in HTML.
+- Smulweb: web_fetch gaf alleen URL terug (SPA-laag of soft block), community-content variabele kwaliteit. Afgevoerd.
+
+**Scrape-resultaat HelloFresh.** 29 diners ingevoerd via een tijdelijke `bulk_insert_hf_meals(jsonb)` RPC. Categorie-pagina `/recipes/snelle-recepten` leverde 106 raw URL's; gefilterd op staging-codes (`w14-`, `w42-`, `use-nid/eid/hvp`, `open-briefing`) bleef ongeveer 50 over. Daarvan 30 geselecteerd voor de eerste batch, 29 met complete data (1 testrun zonder naam). Gem 814 kcal/portie, range 603-1133.
+
+**Bulk-import patroon herzien (belangrijke vondst).** Direct SQL-VALUES doorgeven via Chrome JS-output liep stuk: (1) Chrome MCP truncates JS-output boven ~10KB voor display, (2) Cookie/query-string-filter blokkeert "transformerige" image-URL's en grote payloads onvoorspelbaar. Oplossing die wel werkte:
+1. Scrape in batches van 5-10 URL's via `fetch()` vanaf het eigen domein (same-origin, geen CORS), stash resultaat in `window.__scraped`.
+2. Maak een tijdelijke RPC met `security definer` in Supabase (`bulk_insert_hf_meals(data jsonb)`) die per recept de mapping naar de meals-tabel doet.
+3. POST de hele payload als één jsonb via `/rest/v1/rpc/<func>` met de anon-key. Server-side insert bypasst RLS.
+4. Drop de RPC direct na de import.
+
+Voordeel: één tool-call, geen data-overdracht via Claude's context, geen escape-issues, dedup centraal in de functie. Tijdelijke RPC bestond circa 30 sec en kreeg `grant execute to anon` (acceptabel risico voor productie omdat sign-up dicht staat). Reusable voor toekomstige imports, bewaren als pattern.
+
+**Foto-dekking solo-meals.** 42 solo-meals voor week 21 zonder image_url. Aanpak: 18 Unsplash stock-foto's (path-only URLs zonder query string, om de Cookie/query-string-filter te ontwijken) gekoppeld op keyword-match in 15 UPDATE-statements van specifiek naar algemeen (`shake` voor alle shake-varianten eerst, daarna `kwark` voor de rest, etc.). Resultaat: 541/541 actieve meals met foto.
+
+**v2.18.x backlog.** (1) Verifiëren dat de Unsplash photo-IDs juiste content tonen (kwaliteits-pass over de solo-meal-foto's). (2) 15gram als secundaire bron pas inzetten na kcal-fallback via `compute_meal_macros()`. (3) Tweede HelloFresh-batch (~30 extra recepten uit de "20 minuten"-categorie) als de eerste batch in gebruik bevalt. (4) RPC-import-script verplaatsen naar `lib/import.js` als reusable module.
+
+**Cijfers per 16 mei 2026.** Bibliotheek: 541 actief (was 464), 255 diners (was 226), 100% foto-dekking, kcal-coverage HelloFresh-set 29/29.
+
+---
+
+## 2026-05-16 — v2.19 (bibliotheek-uitbreiding sessie 1)
+
+**Doelstelling.** Peter wil uiteindelijk 1000 actieve meals met variatie: 40% snel ≤30 min, 35% doordeweeks 30-60 min, 25% feestelijk/weekend, plus een breed pallet eiwit-bronnen (vlees, kip, vis, vegetarisch, vegan, peulvruchten) en cuisines (mediterraan, aziatisch, Nederlands, Mexicaans, Noord-Afrikaans). Geen restricties op ingredienten of bronnen. Per sessie ~150 nieuwe diners; sessie 1 was deze.
+
+**Wat erin ging.**
+- HelloFresh +62 (uit categorieën snelle-recepten, vegetarische-recepten, 20-minuten-recepten, mediterrane-recepten, gezonde-recepten, visrecepten).
+- AH Allerhande +75 (uit categorie-pagina's visgerechten, tajine, japanse-recepten, thaise-recepten, vegetarische-ovenschotels, ramen-recepten, teriyakirecepten, marokkaanse-recepten, indiase-recepten, curry).
+- Leuke Recepten +11 (uit /gerechten/hoofdgerechten/, /makkelijke-recepten/, /ovenschotels/ - veel pagina's zijn artikel-/overzichts-pagina's zonder schema.org/Recipe, dus quality-gate filterde 65/78 weg).
+- Totaal sessie 1: 148 nieuwe diners. Stand: 689 actief, 403 diners (was 255).
+
+**Importpatroon definitief.** v2.18 RPC-truc generiek gemaakt: `bulk_insert_diner_meals(data jsonb)` met security definer accepteert payload van willekeurige bron, dedup op naam (case-insensitive), quality-gate op naam+image+ingredients, defaults op NOT NULL kolommen (`dieet`, `seizoen`). Drop direct na sessie. Patroon werkt voor: HelloFresh JSON-LD, AH Allerhande JSON-LD (+ kcal-regex fallback op `"calories"` veld in HTML), Leuke Recepten WP Recipe Maker JSON-LD.
+
+**Belangrijke fix tijdens deze sessie.** Eerste RPC liet `dieet` op NULL ipv default '{}' → NOT NULL constraint violation. Fix met `coalesce(..., '{}'::text[])`. Tweede: Leuke Recepten's `recipeYield` is een array `["4","4 personen"]` terwijl HF en AH een int teruggeven. Workaround in JS: `normServes()` pakt eerste numeric uit array of string.
+
+**Tag-pass voor cuisine, hoofdingrediënt, dieet.** Heuristische SQL-UPDATEs op naam-keywords (zie `views/build.js` SEIZOENEN-lijst voor de schema). Resultaat:
+- cuisine: 350/403 = 87%
+- hoofdingredient: 299/403 = 74%
+- dieet bevat 'vegetarisch': 222/403 = 55% (was 110/255 = 43%)
+- vis als hoofdingr: 42 (was 19, doel 100)
+- kip: 55, rund/varken: 38, pasta: 49
+
+**Kcal-coverage.** 296/403 diners hebben kcal (73%). Was 148/255 (58%). Verbetering komt door HF + AH JSON-LD die kcal direct leveren. `compute_meal_macros()` runt nog steeds, maar voor de oude meals zonder normalisatie blijft de pipeline beperkt. Backlog: macro-aanvulling voor de 107 zonder kcal pas na alias-uitbreiding (v2.16-backlog punt 1).
+
+**Lessons learned voor sessie 2/3.**
+1. AH Allerhande category-pagina's leveren makkelijk 80-100 URLs per categorie. Combineer 10 categorieën voor 500+ URLs. Beste seedbron voor variatie.
+2. Leuke Recepten heeft veel listicle-pagina's ("15 x snel-klaar") die geen Recipe-data hebben. Quality-gate filtert ze automatisch, maar het verspilt fetches. Beter: sitemap.xml gebruiken in plaats van categorie-pagina's. Of: WP Recipe Maker recipe-archive URL.
+3. Brenda Kookt en 24kitchen nog niet aangeraakt - reserveer voor sessie 2.
+4. Vis-stand 42 vs doel 100: in sessie 2 specifiek meer vis-recepten van AH (>50 ID's beschikbaar in hun visgerechten-categorie).
+5. Bereidingstijd-verdeling nog niet gecheckt; doe in sessie 2.
+
+**Cijfers per 16 mei 2026 einde dag.** 689 actief, 403 diners, 100% foto, 73% kcal, 87% cuisine, 74% hoofdingredient. Tot 1000 nog ~311 te gaan, waarvan ~350 diners. Geschat 2 sessies van vergelijkbare omvang.
+
+---
+
+## 2026-05-16 — v2.20 (bibliotheek-uitbreiding sessie 2)
+
+**Wat erin ging.**
+- Brenda Kookt +30 (uit /recepten/menugang/hoofdgerecht/ categorie). Schema.org/Recipe aanwezig maar GEEN nutrition.calories. Quality-gate verlaagd: kcal optioneel voor deze bron, kcal-aanvulling later via compute_meal_macros() of handmatige tag-pass.
+- 24kitchen +30 (uit /recepten/ hoofdpage + 6 categorie-pagina's: italiaans, aziatisch, frans, 30-60-min, 60+min, oven). 36 valid, 6 dups. Idem geen kcal in JSON-LD bij meeste.
+- Leuke Recepten via sitemap +59 (uit /leu_recipe-sitemap.xml met 998 URLs). Spreiding via stride van ~17 om variatie te krijgen. **Veel hogere yield dan de category-pagina-aanpak van v2.19** (60/60 vs 13/78). Voor toekomstige LR-batches altijd sitemap gebruiken.
+- Totaal sessie 2: 119 nieuwe diners. Stand: 808 actief, 522 diners.
+
+**Belangrijke vondst voor de quality-gate.** Brenda Kookt en 24kitchen leveren prima Recipe-data maar geen kcal in schema.org. Quality-gate voor deze sessie versoepeld: name + image + ingredients verplicht, kcal optioneel. Resultaat: 522 diners maar slechts 361 (69%) met kcal. Backlog: compute_meal_macros() draaien zodra de ingredient-aliases-laag uitgebreid is, of een dedicated nutrition-scrape via een tweede pass op de bron-URL als deze in HTML staat (Brenda zet macros mogelijk in de WP Recipe Maker UI maar niet in JSON-LD - controleren).
+
+**Verdeling-update.**
+- vis: 53 (was 42, doel 100) — nog 47 nodig
+- kip: 68 (was 55, doel 60+) — doel gehaald
+- rund/varken/peulvrucht: nog niet exact gemeten
+- vegetarisch: 277/522 = 53% (was 55%)
+- cuisine: 435/522 = 83%, hoofdingredient 360/522 = 69%
+
+**Sessie 3 voorbereiding.**
+- ~192 actieve meals te gaan voor 1000. ~228 diners.
+- Vis-quotum nog 47. Mik op AH visgerechten-sitemap-pagina's + 24kitchen vis-categorie + Hartig Hapje vis.
+- Feestelijk (60+ min): nog te tellen. Mogelijk weinig in huidige stand omdat sessie 1+2 voornamelijk doordeweekse recepten waren. Sessie 3 specifiek 24kitchen chefs + AH "feestelijk" + Brenda Kookt weekend-recepten.
+- Bronnen voor sessie 3: AH-vis dedicated, Hartig Hapje, VegaRecepten, OhMyFoodness, Sofie Dumont. Of meer uit LR-sitemap 2 en 3 (3000 recepten beschikbaar).
+- Tag-pass v2.20 dekte alleen de standaard-cuisines. Onbekende blijven onbekend; backlog: per-meal LLM-classificatie voor de 165 cuisineloze meals als de bibliotheek stabiliseert.
+
+**Cijfers per 16 mei 2026 einde van sessie 2.** 808 actief, 522 diners, 100% foto, 69% kcal, 83% cuisine, 69% hoofdingredient. Tot 1000 nog 192 te gaan.
+
+---
+
+## 2026-05-16 — v2.20.1 (dedup-consolidatie)
+
+**Probleem.** Peter ontdekte duplicaten in de bibliotheek. Mijn dedup-RPC checkte alleen op exacte name-match in dezelfde batch, niet op cross-batch dupes en niet op cosmetische varianten.
+
+**Bevindingen via trigram-similarity** (`pg_trgm` extension enabled):
+- **Categorie A (47 records → 20 echte gerechten):** solo-meals waarvan elke dietist-import een nieuwe record-rij aanmaakte met dezelfde naam (Noten naar keuze 4×, Shake met yoghurt en fruit 4×, Borrelhapje kaas 3×, Ei gekookt 3×, Kefir 3×, plus 15 paren à 2 records). Allemaal in suitable_for=['peter'] of ['miranda'].
+- **Categorie B (5 paren):** echte naam-varianten van hetzelfde gerecht: Omelet met mandarijn+kaas vs Omelet met kaas+mandarijn, "Beet Wellington" vs "Biet Wellington" (typo), Bladerdeegpakketjes met zalm vs Zalm in bladerdeeg, Borrelhapje kaas vs Kaas naar keuze (borrelhapje), Tofubowl pindasaus vs Tofu bowl satésaus.
+- **Categorie C/D:** HelloFresh "dubbele portie"-varianten en subtiel verschillende recepten (Thaise rode vs groene curry, Volle vs Magere kwark) bewust niet samengevoegd.
+
+**Aanpak.** Per cluster oudste meal = canonical (gekozen op `min(created_at)`). UPDATE week_meals.meal_id van de duplicaten naar canonical (29 + 8 = 37 FK-references gemigreerd). Soft-delete via `deleted_at = now()` op 27 + 5 = 32 dup-records.
+
+**Edge case (post-fix nodig).** Drie van mijn week 21 solo-meal inserts waren JONGER dan de oudere canonical met dezelfde naam. Mijn CTE migreerde week_meals → canonical, maar de week_meal verwees naar de DUP-id. Na de eerste pass: 3 orphan week_meals. Fix via tweede pass die per orphan opnieuw de canonical zoekt en update.
+
+**Vier oudere orphans laten staan.** week_meals voor wk19 ("Kip kerrie met broccoli en rijst", soft-deleted 9 mei) en wk20 ("Macaroni met balletjes", soft-deleted 16 mei vroeger). Niet door deze sessie veroorzaakt; Peter had ze waarschijnlijk handmatig verwijderd (bv. negatieve rating). Backlog: opruim-script voor week_meals die naar soft-deleted meals wijzen.
+
+**Resultaat.** 805 → 773 actief (-32), 522 → 519 diners (-3). 0 exacte naam-dups over. 0 nieuwe orphans, 4 pre-existing orphans gerapporteerd.
+
+## 2026-05-16 — v2.21 (airfryer-uitbreiding + UI-chip 'Airfryer + stoom')
+
+**Doel.** Peter vroeg om gerichte airfryer-recepten plus een aparte sub-categorie voor airfryer-met-stoomfunctie gerechten (Philips SteamFry, Princess Steam Aerofryer).
+
+**Wat erin ging.**
+- AH Allerhande +8 (uit specifieke airfryer-recept-URLs uit WebSearch).
+- 24kitchen +15 (uit /thema/airfryer-recepten - DOM-extract werkte hier wel).
+- Leuke Recepten +4 (uit /8-x-airfryer-recepten/ listicle).
+- Brenda Kookt +1 (slug-zoek op "airfryer" in /recepten/).
+- KeukenLiefde +1 (gewone airfryer-variant).
+- 2 handmatige airfryer-stoom records (Gestoomde kip + groenten, Gestoomde zalm) omdat KeukenLiefde's Steam Aerofryer-recepten de quality-gate niet haalden.
+- **Totaal: 31 nieuwe airfryer-records**, bibliotheek nu 39 airfryer waarvan 2 airfryer-stoom.
+
+**UI-aanpassing.** `views/build.js`: nieuwe chip `['airfryer-stoom', 'Airfryer + stoom']` toegevoegd aan `KOOKWIJZES` array. Verschijnt in de bibliotheek-filter rail tussen Airfryer en Eenpans. Versie bumped naar v2.21.
+
+**Tag-logica.** Tijdens scrape detectie van stoom-keywords (stoomfunctie / stomen / steam / steamfry / aerofryer / gestoomd / stoomprogramma) in naam, instructies én URL. Match → `kookwijze = ['airfryer','airfryer-stoom']` zodat ook de algemene airfryer-filter ze toont. Mismatch → alleen `['airfryer']`.
+
+**Beperking deze sessie.** Stoom-recepten zijn schaars in het Nederlandse foodblog-landschap (Philips SteamFry is relatief nieuw, mei 2026). Echte 'airfryer-stoom'-content nu vooral bij KeukenLiefde en SofieDumont. Voor uitbreiding in komende sessies: scrape Sofie Dumont, Foodies Magazine, Philips' eigen receptenpagina.
+
+**Cijfers per einde 16 mei 2026.** 804 actief, 550 diners, 39 airfryer-recepten waarvan 2 airfryer-stoom. RPC `bulk_insert_diner_meals` gedropped.
+
+## 2026-05-16 — v2.21.1 (Philips Airfryer 5000 SteamFry-mini-batch)
+
+**Doel.** Peter vroeg specifiek of de airfryer-stoom recepten ook werken met de Philips Airfryer 5000 (SteamFry-functie).
+
+**Bevinding.** Philips' eigen recept-database (HomeID-app) is niet scrapebaar zonder de app. Foodies Magazine bleek wel de beste publiekelijke bron: 66 airfryer-recepten gevonden via /airfryer-recepten/ listing, waarvan eentje (gestoomde bao buns) als airfryer-stoom getagged.
+
+**Resultaat.**
+- Foodies Magazine +30 airfryer-recepten gescraped, 1 dup. Inclusief 1 expliciet stoom-recept (bao buns met kimchi).
+- 3 bestaande airfryer-stoom recepten geüpdate met description-suffix "Werkt met Philips Airfryer 5000 (SteamFry-stand), Princess Steam Aerofryer en Tefal Steam Genius." voor Peter's specifieke apparaat.
+- 2 handmatig geschreven Philips 5000-recepten toegevoegd ("Sappige kipfilet uit Philips Airfryer 5000 (SteamFry)", "Knapperige zalm met asperges (Philips SteamFry)") met expliciete SteamFry-programma-instellingen (200°C / 22 min en 180°C / 12-15 min).
+- Stand airfryer: 71 (was 39), waarvan 5 airfryer-stoom-tagged. 3 daarvan met expliciete Philips-info.
+
+**Bibliotheek-stand einde sessie.** 836 actief, 582 diners. Tot 1000-doel nog 164 te gaan.
+
+**Lesson learned.** Voor merk-specifieke recepten (Philips, Tefal, Princess) is publieke scrape niet productief - de fabrikanten houden hun recepten in eigen apps. Bruikbaar pattern: bestaande generieke stoom-airfryer recepten taggen + description-suffix met merk-info, plus 1-2 handmatig geschreven referentierecepten per merk.
+
+**Lessons voor toekomstige imports.**
+1. Dedup-check in `bulk_insert_diner_meals` is goed voor cross-batch binnen één run, maar checkt niet tegen historische data van eerdere weken (waar dezelfde meal-naam vaker is gebruikt). Verbetering: bij elke insert óók zoeken naar bestaande active meal met zelfde lower(name)+type+suitable_for; bij hit géén nieuwe row maar return existing id.
+2. Solo-meal patroon "elke dag een eigen meal" veroorzaakt vrijwel zeker dupes. Bij volgende week-imports: pas direct hergebruik toe (one meal per unique-name+suitable_for, meerdere week_meal-koppelingen). Sneller én geen consolidatie achteraf nodig.
+3. Trigram-similarity met drempel 0.55 levert bruikbare lijst near-dupes voor menselijke review. Drempel 0.7+ is bijna altijd echte dup.
+---
