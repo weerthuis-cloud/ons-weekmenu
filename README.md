@@ -4,7 +4,7 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.21.1** (Philips SteamFry-aanvulling: +30 airfryer-recepten uit Foodies Magazine + 2 handmatige Philips 5000-recepten met expliciete SteamFry-instellingen. 836 actief, 582 diners, 71 airfryer-recepten waarvan 5 met stoomfunctie).
+Huidige versie: **v2.22** (Week 22 import: 7 nieuwe diners + 34 solo-meals + 56 week_meal-koppelingen voor Peter en Miranda. Macros via eigen NEVO-berekening in xlsx-rapport `outputs/week22_macros.xlsx` (5 sheets, 1120 formules). 921 actief, 633 diners).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -35,6 +35,7 @@ Versies in volgorde:
 - v2.7 Ingredient-macros database (343 entries) + aggregator-functie compute_meal_macros(); macro-coverage opgekrikt van 14% naar 62% — klaar
 - v2.7a–c Bereidingswijze + beschrijving + bron-URL in meal-editor; ingrediënten boven bereiding; auto-growing textarea zonder scrollbalk; macro-cellen horizontaal in 1 rij — klaar
 - v2.8 meals.image_url + re-scrape Recipe.image (418/464 dekking); meal-card toont foto met lazy-load en no-referrer — klaar
+- v2.22 Week 22 import (25-31 mei): 7 nieuwe diners + 34 solo-meals + 56 week_meal-koppelingen. Macros voor het eerst zelf berekend uit NEVO-database in plaats van compute_meal_macros() — xlsx-rapport met formules voor narekenen — klaar
 
 ## Architectuur
 

@@ -1215,8 +1215,82 @@ Voordeel: één tool-call, geen data-overdracht via Claude's context, geen escap
 
 **Lesson learned.** Voor merk-specifieke recepten (Philips, Tefal, Princess) is publieke scrape niet productief - de fabrikanten houden hun recepten in eigen apps. Bruikbaar pattern: bestaande generieke stoom-airfryer recepten taggen + description-suffix met merk-info, plus 1-2 handmatig geschreven referentierecepten per merk.
 
+## 2026-05-16 — v2.21.2 (Miljuschka + extra airfryer-batch)
+
+**Doel.** Peter vroeg meer airfryer-stoom-recepten, met expliciete vraag om Miljuschka te checken.
+
+**Miljuschka via Chrome same-origin werkt.** v2.3-import notitie "Miljuschka heeft Cloudflare bot-bescherming; alleen via Chrome-extensie te benaderen" is bevestigd. Navigate naar miljuschka.nl, dan fetch() vanuit page-context werkt prima. Niet via WebFetch of mcp__workspace__web_fetch.
+
+**Resultaat.**
+- Miljuschka +10 airfryer-recepten (4 dupes), waarvan 3 met stoom-tag.
+- Foodies Magazine deel 2 +34 airfryer-recepten (de eerste 30 deden we in v2.21.1).
+- Totaal sessie: 44 nieuwe airfryer-records.
+
+**Stand airfryer.** 115 totaal (was 71), 8 stoom-getagged (was 5). De 3 nieuwe stoom-getagde komen uit Miljuschka (gestoomde recepten + Steam Aerofryer-recepten).
+
+**Bibliotheek-stand.** 880 actief, 626 diners. Tot 1000-doel nog 120 te gaan.
+
+**Cloudflare-workaround voor volgende sessies:** Miljuschka, en mogelijk ook andere Cloudflare-beveiligde sites, kunnen we gewoon scrapen door eerst naar de hoofddomein te navigeren via Chrome MCP en dan fetch() vanuit page-context te doen. Cloudflare ziet het als een echte browser-request met cookies, dus geen challenge. Belangrijke vondst die in memory blijft.
+
+**Cijfers per einde 16 mei 2026.** 880 actief, 626 diners, 115 airfryer-recepten waarvan 8 met stoomfunctie. RPC gedropped.
+
 **Lessons voor toekomstige imports.**
 1. Dedup-check in `bulk_insert_diner_meals` is goed voor cross-batch binnen één run, maar checkt niet tegen historische data van eerdere weken (waar dezelfde meal-naam vaker is gebruikt). Verbetering: bij elke insert óók zoeken naar bestaande active meal met zelfde lower(name)+type+suitable_for; bij hit géén nieuwe row maar return existing id.
 2. Solo-meal patroon "elke dag een eigen meal" veroorzaakt vrijwel zeker dupes. Bij volgende week-imports: pas direct hergebruik toe (one meal per unique-name+suitable_for, meerdere week_meal-koppelingen). Sneller én geen consolidatie achteraf nodig.
 3. Trigram-similarity met drempel 0.55 levert bruikbare lijst near-dupes voor menselijke review. Drempel 0.7+ is bijna altijd echte dup.
 ---
+
+## 2026-05-24 — v2.22 (week 22 import + eigen NEVO-macro-berekening)
+
+**Doel.** Peter leverde de week 22 PDFs aan (Peter + Miranda dietplan + receptenboeken). Tweetraps: eerst macro-analyse (kloppen de dietplan-cijfers wel?), daarna pas import in productie.
+
+**Belangrijke vondst over dietplan-PDFs.** De HTYPT dietplan-PDFs bevatten *geen* kcal of macro-claims per maaltijd of per dag - alleen ingrediënten met grammages. Er valt dus niets te 'vergelijken'. Vanaf nu standaardaanpak: macros zelf berekenen uit NEVO + bron-ingrediënten. Past in plaats van `compute_meal_macros()` die op `ingredient_macros`-tabel werkt (60% dekking).
+
+**xlsx-rapport `outputs/week22_macros.xlsx`** (1120 formules, 5 sheets, 0 errors).
+- Overzicht: dag x macro voor beide personen + week-totaal + daggemiddelde
+- Peter detail / Miranda detail: per dag/slot/maaltijd, VLOOKUP-formule naar Ingredienten-DB
+- Diner-recepten: per recept ingrediënten met VLOOKUP, plus PER PORTIE rij (totaal/4)
+- Ingredienten-DB: 88 ingredient-rijen met kcal/eiwit/koolh/vet per 100g + bron-vermelding
+- Bestand staat in `outputs/`, Peter kan grammages aanpassen en alles herrekent
+- Sanity check: Peter ma ontbijt = 100g bessen + 10g honing + 300g volle kwark = 451 kcal in zowel Python als xlsx. Miranda do lunch (6 ingrediënten) = 510.6 kcal in beide bronnen.
+
+**Berekende macros per dag (gemiddelde):**
+- Peter: 1529 kcal, 93g eiwit, 138g koolh, 66g vet (39% vet)
+- Miranda: 1666 kcal, 88g eiwit, 129g koolh, 88g vet (48% vet)
+- Peter donderdag is fors lager (1134 kcal) - bewust planning, niet rekenfout
+- Miranda's hoge vet komt door 5x avocado, dagelijks noten/pecan/kaas + volle Griekse yoghurt
+
+**Conversielijst stuks→gram (NEVO-standaard, voor toekomstige weken):**
+1 ei eetbaar = 55g, mandarijn = 70g, appel = 150g, avocado 1/2 = 65g, kaasplakje = 20g, kipfilet plakje = 15g, pistolet = 60g, boterham sneetje = 35g, brood zuurdesem = 40g, bolletje = 50g, wrap large = 64g, tortillawrap klein = 32g, cracker = 11g, naanbrood mini = 75g, rotivel = 100g, knoflookteen = 3g, sjalot = 25g, ui middelgroot = 110g, tomaat = 100g, limoen = 50g, rode peper = 15g, verse gember per cm = 5g. Olijfolie 1 el = 9g. Honing 1 el = 21g. Kaneel 1 el = 8g. Kruidenpoeder 1 el = 7g.
+
+**Conventies (door Peter akkoord op 24 mei):**
+- "Groente naar keuze onbeperkt" = 100g rauwkost, 20 kcal/100g
+- "Beleg voor 2 sneetjes" = 30g mix vleeswaren+kaas, 300 kcal/100g (90 kcal voor 30g)
+
+**Import in Supabase:**
+- 7 nieuwe diners (Pasta met kip in champignonsaus, Roti met gehakt/bonen/ei, Zalmcurry met naanbrood, Indonesische kiproerbak, Tortillatosti met spinazie, 'Spicy noodles' met groenteroerbak, Italiaanse aardappelschotel met kaas) — alle suitable_for=['beiden'], serves=4, kcal direct uit NEVO-berekening (niet compute_meal_macros).
+- 34 solo-meals (17 per persoon na binnen-week dedup van identieke combos: Peter ma+do snack=ei, di+za+zo snack=noten, wo+zo lunch=magere kwark+bessen; Miranda ma+zo snack=noten, di+do snack=volle kwark+honing, wo+za snack=kefir).
+- 56 week_meal koppelingen (7 dagen × 4 slots × 2 personen).
+- 7 Unsplash-foto's (placeholder, mogelijk te vervangen door Peter).
+- Bibliotheek-stand: 921 actief (was 880, +41), 633 diners (was 626, +7).
+- BBQ-recepten in het receptenboek (3 stuks: BBQ portobello, BBQ-bloemkool met romesco, Pulled chicken van de BBQ) zijn NIET geïmporteerd want ze staan niet in het dagschema. Backlog: optioneel als bonus-items toevoegen.
+
+**Schema-bevindingen tijdens import (te onthouden voor volgende imports):**
+- Meal-type 'snack' is NIET valide; gebruik 'snack_avond'.
+- Weeks-source 'cowork-import' is NIET valide; gebruik 'dietist' (enige toegestane waarde).
+- Day in week_meals is integer 1-7 (1=ma, 7=zo), niet text-string.
+- `execute_sql` via Supabase MCP bypasst RLS; `created_by=null` is toegestaan. Geen RPC nodig voor service-inserts.
+- Aggregate-functies (count) zijn NIET toegestaan in INSERT RETURNING; wrap in CTE en SELECT count(*) FROM cte.
+
+**WK22-tag-markers blijven in `meals.tags`** ('WK22_LOOKUP_*', 'WK22_SOLO_*'). Niet opgeruimd want handig voor toekomstige queries "welke meals zijn van week 22". Geen vervuiling van bibliotheek-filters (kookwijze gebruikt aparte kookwijze-kolom, niet tags).
+
+**Lessons voor volgende imports.**
+1. Voor weeks-import: check eerst `select distinct source from weeks` en `select distinct type from meals` voor toegestane waarden. Schema-check constraint geeft alleen 'check constraint violated' zonder de toegestane lijst.
+2. Macro-berekening direct via NEVO is sneller en transparanter dan `compute_meal_macros()`-aanvulling achteraf. Voor week 23+ standaard volgen.
+3. xlsx-rapport met VLOOKUP-formules is goed voor Peter's narekenen. Houd de Ingredienten-DB sheet als single source of truth.
+4. Solo-meal dedup binnen week (gelijke ingredient+gram = 1 meal met meerdere koppelingen) werkt netjes en voorkomt vervuiling. 21 dagslots → 17 unieke meals door 4 binnen-week dupes.
+
+**Backlog v2.22.x:**
+- 3 BBQ-recepten als bonus toevoegen aan bibliotheek (zomerseizoen).
+- Unsplash-placeholderfoto's mogelijk vervangen door echte HTYPT-foto's als die beschikbaar komen.
+- Macro-rapport-pattern toepassen op week 21 retrospectief? Optioneel.
