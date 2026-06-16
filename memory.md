@@ -1437,3 +1437,13 @@ NB: dit is een ruwe SQL-aggregatie zonder de `normalizeName`/aliassen/cross-unit
 **Classificatie-aanvulling (Supabase, conservatief).** 308/407/748/430 actieve meals misten keuken/hoofd/kookwijze/dieet. Aanpak: tekst-blob (naam+beschrijving+ingrediëntnamen), trefwoord-regex per waarde, alleen lege velden gevuld, nooit overschreven. Resultaat: keuken +43 (705/970), hoofd +229 (792), kookwijze +288 (510), dieet +10 (550). LES: eerste dieet-run gaf 39 vegan-treffers door 'plantaardig' (matcht 'plantaardige olie/boter' in gewone recepten) — te breed. Gecorrigeerd door dieet terug te zetten naar backup en opnieuw te deriven met vegan = '\mvegan\M|veganis' (zonder plantaardig); dieet nu +10. Backup-tabel `zz_meals_class_bak_v228` (pre-staat) blijft staan voor terugdraaien; overzicht in outputs/classificatie_aanvulling_v2.28.xlsx. Nog te overwegen: tabel droppen na verificatie.
 
 **Niet gepusht door mij** (sandbox zonder GitHub-auth). DB-wijzigingen staan al live in Supabase.
+
+## v2.29 — planner als dagkaarten (16 juni 2026)
+
+**Aanleiding.** Peter vond het weekrooster van de inplan-planner (v2.27) rommelig: elk vakje een eigen kader, stippellijnen trokken aandacht naar lege plekken, emoji-iconen vloekten met de typografie. Drie varianten getoond via visualize-widget (strak rooster / hoofdmaaltijden groot / dagkaarten). Peter koos dagkaarten.
+
+**Bouw (meal-scheduler.js).** Weekrooster vervangen door `.ms-cards` (grid auto-fill minmax(220px,1fr); 1 kolom op ≤520px). Per dag een `.ms-day`-kaart met dag-naam + datum (vandaag krijgt accent-rand) en de 6 slots als rijen (`.ms-row`, button): icoon + label + gerecht (of grijs "toevoegen"). Klikken plaatst nog steeds via place()/setWeekMeal; logica (persoon/beiden/weeknav/snapshot n.v.t.) ongewijzigd. Emoji vervangen door lokale monochrome SVG lijn-iconen (SLOT_SVG, paden overgenomen uit slot-icon.js dat zelf uitgezet staat met `return null`). Rij die matcht met meal.type krijgt nadruk; zojuist geplaatste rij krijgt outline.
+
+**Verificatie.** node --check groen; vite build schone kopie zonder fouten.
+
+**Niet gepusht door mij** (sandbox zonder GitHub-auth). Staat lokaal als v2.29 klaar.
