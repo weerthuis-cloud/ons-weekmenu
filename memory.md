@@ -1429,3 +1429,11 @@ NB: dit is een ruwe SQL-aggregatie zonder de `normalizeName`/aliassen/cross-unit
 **Verificatie.** node --check op 3 bestanden; vite build schone kopie zonder fouten; 9 logica-tests (week-navigatie incl. jaargrens, cel-matching, beiden-targets, suggest-highlight) groen.
 
 **Niet gepusht door mij** (sandbox zonder GitHub-auth). Peter pusht zelf vanuit de projectmap.
+
+## v2.28 — editor-layout twee kolommen + classificatie-aanvulling (16 juni 2026)
+
+**Editor-layout (meal-picker.js, edit/create-form).** Herordend op verzoek: plan-knop (📅 Inplannen, alleen edit-modus, opent meal-scheduler) bovenaan; daarna Naam; dan een twee-koloms blok `.mp-cook` met ingrediënten links en bereidingswijze rechts (meegroeiend tekstvak, elke stap op nieuwe regel, ing-rows max-height opgeheven zodat alles zichtbaar is tijdens koken); daaronder de meta-velden (type/kooktijd/keuken/hoofd/kcal/kookwijze/dieet/beschrijving); bron- en foto-URL onderaan. Op ≤560px stapelen de twee kolommen. Voorbeeld vooraf getoond via visualize-widget en goedgekeurd.
+
+**Classificatie-aanvulling (Supabase, conservatief).** 308/407/748/430 actieve meals misten keuken/hoofd/kookwijze/dieet. Aanpak: tekst-blob (naam+beschrijving+ingrediëntnamen), trefwoord-regex per waarde, alleen lege velden gevuld, nooit overschreven. Resultaat: keuken +43 (705/970), hoofd +229 (792), kookwijze +288 (510), dieet +10 (550). LES: eerste dieet-run gaf 39 vegan-treffers door 'plantaardig' (matcht 'plantaardige olie/boter' in gewone recepten) — te breed. Gecorrigeerd door dieet terug te zetten naar backup en opnieuw te deriven met vegan = '\mvegan\M|veganis' (zonder plantaardig); dieet nu +10. Backup-tabel `zz_meals_class_bak_v228` (pre-staat) blijft staan voor terugdraaien; overzicht in outputs/classificatie_aanvulling_v2.28.xlsx. Nog te overwegen: tabel droppen na verificatie.
+
+**Niet gepusht door mij** (sandbox zonder GitHub-auth). DB-wijzigingen staan al live in Supabase.

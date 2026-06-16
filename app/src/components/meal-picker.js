@@ -7,6 +7,7 @@ import { listMeals, addMeal, updateMeal, softDeleteMeal } from '../lib/data.js';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { UNITS } from '../lib/units.js';
 import { SlotIcon } from './slot-icon.js';
+import { openMealScheduler } from './meal-scheduler.js';
 
 // v2.7b: auto-grow textarea zodat bereidingswijze in z'n geheel zichtbaar is, geen scrollbalk.
 function autoGrow(el) {
@@ -408,6 +409,12 @@ function view() {
           <button class="btn" @click=${() => { ui.mode = 'create'; rerender(); }}>+ nieuwe maaltijd</button>
         ` : html`
           <form @submit=${saveDraft}>
+            ${isEdit ? html`
+              <div class="mp-planrow">
+                <button type="button" class="btn mp-planbtn"
+                  @click=${() => ui.editing && openMealScheduler({ meal: ui.editing })}>📅 Inplannen in een week</button>
+              </div>
+            ` : ''}
             <label>
               Naam
               <input
@@ -416,6 +423,46 @@ function view() {
                 @input=${(e) => { ui.draft.name = e.target.value; }}
               />
             </label>
+
+            <!-- v2.28: ingrediënten + bereidingswijze als twee kolommen — het belangrijkst tijdens koken -->
+            <div class="mp-cook">
+              <fieldset class="ing">
+                <legend>Ingrediënten <span class="hint">(naam verplicht, rest optioneel)</span></legend>
+                <div class="ing-rows">
+                  ${ui.draft.ingredients.map((ing, i) => html`
+                    <div class="ing-row">
+                      <input
+                        class="ing-name"
+                        placeholder="ingrediënt"
+                        .value=${ing.name}
+                        @input=${(e) => { ing.name = e.target.value; }}
+                      />
+                      <input
+                        class="ing-qty"
+                        type="number" min="0" step="0.1"
+                        placeholder="hvh"
+                        .value=${ing.qty}
+                        @input=${(e) => { ing.qty = e.target.value; }}
+                      />
+                      <select class="ing-unit" .value=${ing.unit} @change=${(e) => { ing.unit = e.target.value; }}>
+                        ${UNITS.map(u => html`<option value=${u.id} ?selected=${u.id === ing.unit}>${u.label}</option>`)}
+                      </select>
+                      <button type="button" class="ing-x" title="verwijder" @click=${() => removeIngredientRow(i)}>×</button>
+                    </div>
+                  `)}
+                </div>
+                <button type="button" class="btn ghost small" @click=${addIngredientRow}>+ rij</button>
+              </fieldset>
+              <label class="mp-recipe">
+                Bereidingswijze <span class="hint">(elke stap op een nieuwe regel)</span>
+                <textarea class="recipe-area"
+                  placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
+                  .value=${ui.draft.recipe}
+                  ${ref((el) => el && requestAnimationFrame(() => autoGrow(el)))}
+                  @input=${(e) => { ui.draft.recipe = e.target.value; autoGrow(e.target); }}></textarea>
+              </label>
+            </div>
+
             <div class="row">
               <label>
                 Type
@@ -489,6 +536,8 @@ function view() {
                 .value=${ui.draft.description}
                 @input=${(e) => { ui.draft.description = e.target.value; }} />
             </label>
+
+            <!-- v2.28: bron- en foto-URL onderaan, minst belangrijk tijdens koken -->
             <label>
               Bron-URL <span class="hint">(optioneel)</span>
               <input type="url" placeholder="https://miljuschka.nl/..."
@@ -506,41 +555,6 @@ function view() {
                   referrerpolicy="no-referrer"
                   @error=${(e) => { e.target.style.display = 'none'; }} />
               ` : ''}
-            </label>
-            <fieldset class="ing">
-              <legend>Ingrediënten <span class="hint">(naam verplicht, rest optioneel)</span></legend>
-              <div class="ing-rows">
-                ${ui.draft.ingredients.map((ing, i) => html`
-                  <div class="ing-row">
-                    <input
-                      class="ing-name"
-                      placeholder="ingrediënt"
-                      .value=${ing.name}
-                      @input=${(e) => { ing.name = e.target.value; }}
-                    />
-                    <input
-                      class="ing-qty"
-                      type="number" min="0" step="0.1"
-                      placeholder="hvh"
-                      .value=${ing.qty}
-                      @input=${(e) => { ing.qty = e.target.value; }}
-                    />
-                    <select class="ing-unit" .value=${ing.unit} @change=${(e) => { ing.unit = e.target.value; }}>
-                      ${UNITS.map(u => html`<option value=${u.id} ?selected=${u.id === ing.unit}>${u.label}</option>`)}
-                    </select>
-                    <button type="button" class="ing-x" title="verwijder" @click=${() => removeIngredientRow(i)}>×</button>
-                  </div>
-                `)}
-              </div>
-              <button type="button" class="btn ghost small" @click=${addIngredientRow}>+ rij</button>
-            </fieldset>
-            <label>
-              Bereidingswijze <span class="hint">(stappen, één per regel)</span>
-              <textarea class="recipe-area"
-                placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
-                .value=${ui.draft.recipe}
-                ${ref((el) => el && requestAnimationFrame(() => autoGrow(el)))}
-                @input=${(e) => { ui.draft.recipe = e.target.value; autoGrow(e.target); }}></textarea>
             </label>
             ${ui.error ? html`<div class="err">${ui.error}</div>` : null}
             <div class="row right">
@@ -691,6 +705,16 @@ function view() {
         padding: 10px 14px;
         border-radius: var(--r-md);
         font-size: 14px;
+      }
+      /* v2.28: plan-knop boven + twee-koloms kook-layout */
+      .mp-planrow { display: flex; justify-content: flex-end; }
+      .mp-planbtn { display: inline-flex; align-items: center; gap: 6px; }
+      .mp-cook { display: grid; grid-template-columns: 1fr 1.25fr; gap: 14px; align-items: start; }
+      .mp-cook .mp-recipe { display: flex; flex-direction: column; gap: 4px; }
+      .mp-cook .recipe-area { min-height: 200px; }
+      .mp-cook .ing-rows { max-height: none; }
+      @media (max-width: 560px) {
+        .mp-cook { grid-template-columns: 1fr; }
       }
       fieldset.ing { display: flex; flex-direction: column; gap: 8px; }
       .ing-rows { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
