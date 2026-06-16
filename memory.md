@@ -1457,3 +1457,22 @@ NB: dit is een ruwe SQL-aggregatie zonder de `normalizeName`/aliassen/cross-unit
 **Verificatie.** node --check groen; 5 parseSteps-tests groen (incl. kapsalon-case '1. … 2. …' op één regel); vite build schone kopie zonder fouten.
 
 **Niet gepusht door mij** (sandbox zonder GitHub-auth).
+
+## v2.31 — archief uitgebreid (16 juni 2026)
+
+**Migratie.** `weeks.favoriet boolean not null default false` + partial index (apply_migration add_weeks_favoriet). listWeeks-select uitgebreid met favoriet (stond eerst expliciet kolommen op te sommen).
+
+**Archief (views/library.js).** Drie kernwensen + drie gekozen extra's:
+- Foto-mozaïek: nieuwe data-fn weekCoverImages(weekIds) haalt per week tot 3 image_urls (diner eerst via slot-rank), getoond als achtergrond-tegels; valt terug op de bestaande hue-stripes als een week geen foto's heeft (bv. lege eigen week).
+- Favorieten: setWeekFavoriet(weekId, bool), ster-knop op de mozaïek, filterchip '★ Favorieten' (vs.filter==='fav').
+- Kopieer naar…: oude Dupliceer hernoemd; modal heeft nu doelpersoon-select (vs.dup.dstSlug), dus cross-person kopiëren kan. duplicateWeekMeals is owner-agnostisch (kopieert day/slot/meal_id/porties naar dst-week-id).
+- Notitie per week: updateWeekNotitie(weekId, tekst|null); inline weergave + bewerk-modal (vs.note).
+- Boodschappen-knop: shopping.js exporteert nu gotoShoppingWeek(year, weekNr) (zet vs.year/week + setViewWeek + loadAll); archief roept die aan en setRoute('lijst').
+- Week vooruit plannen: knop per persoon in block-head → modal (vs.planNew) → addWeek(eigen) + open.
+- Voortgangsbalkje (wb-bar) vervangt de kale tekst niet maar staat erbij. Week-card is van <button> naar <div> omdat er nu meerdere interactieve elementen in zitten (geen geneste buttons).
+
+**Verificatie.** node --check op 3 bestanden; vite build schone kopie zonder fouten; DB-check: recente weken 28/28 slots met image_url (mozaïek toont echte foto's), lege week valt terug op kleurvlakken.
+
+**Let op (naamgeving).** De archief-view heet in de h1 nog "Bibliotheek" terwijl views/build.js óók "Bibliotheek" (recepten) is — verwarrend maar buiten scope gelaten.
+
+**Niet gepusht door mij** (sandbox zonder GitHub-auth).

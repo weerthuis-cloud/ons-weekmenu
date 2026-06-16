@@ -1,12 +1,14 @@
 // Archief v0.6: prototype-stijl mosaic preview-cards.
 import { html, nothing } from 'lit-html';
 import { listProfiles, listWeeks, countSlotsByWeek, addWeek, getWeek, duplicateWeekMeals, onDataChange,
+         setWeekFavoriet, updateWeekNotitie, weekCoverImages,
          exportAllData, restoreFromBackup, deleteWeeksOlderThan, wipeAllUserData } from '../lib/data.js';
 import { loadIgnored, removeIgnored, notifyIgnoredChange } from '../lib/ignored.js';
 import { formatWeekRange, todayInfo } from '../lib/datums.js';
 import { rerender } from '../main.js';
 import { setRoute } from '../router.js';
 import { gotoWeek } from './week.js';
+import { gotoShoppingWeek } from './shopping.js';
 
 const vs = {
   loading: false,
@@ -14,9 +16,12 @@ const vs = {
   profiles: null,
   weeks: { peter: [], miranda: [] },
   slotCounts: {},
+  covers: {},          // v2.31: weekId → [image_url,...]
   initialized: false,
-  filter: 'all', // 'all' | 'dietist' | 'eigen'
+  filter: 'all', // 'all' | 'dietist' | 'eigen' | 'fav'
   dup: null,
+  note: null,          // v2.31: { slug, week, value }
+  planNew: null,       // v2.31: { slug, year, week }
 };
 
 function ensureInit() {
@@ -40,6 +45,7 @@ async function loadAll() {
       for (const w of vs.weeks[slug]) allIds.push(w.id);
     }
     vs.slotCounts = await countSlotsByWeek(allIds);
+    vs.covers = await weekCoverImages(allIds);
   } catch (err) {
     vs.error = err.message;
   } finally {
@@ -56,7 +62,7 @@ function openWeek(year, weekNr) {
 function startDuplicate(srcSlug, srcWeek) {
   const t = todayInfo();
   const next = t.week + 1 > 52 ? { year: t.year + 1, week: 1 } : { year: t.year, week: t.week + 1 };
-  vs.dup = { srcSlug, srcWeek, year: next.year, week: next.week };
+  vs.dup = { srcSlug, dstSlug: srcSlug, srcWeek, year: next.year, week: next.week };
   rerender();
 }
 
@@ -64,7 +70,7 @@ async function confirmDuplicate() {
   if (!vs.dup) return;
   vs.loading = true; rerender();
   try {
-    const profile = vs.profiles[vs.dup.srcSlug];
+    const profile = vs.profiles[vs.dup.dstSlug];
     let dst = await getWeek(profile.id, vs.dup.year, vs.dup.week);
     if (!dst) dst = await addWeek({ ownerId: profile.id, year: vs.dup.year, week: vs.dup.week, source: 'eigen' });
     await duplicateWeekMeals(vs.dup.srcWeek.id, dst.id);
@@ -76,6 +82,55 @@ async function confirmDuplicate() {
     vs.loading = false;
     rerender();
   }
+}
+
+// v2.31: favoriet toggelen
+async function toggleFav(w) {
+  try {
+    await setWeekFavoriet(w.id, !w.favoriet);
+    await loadAll();
+  } catch (err) { vs.error = err.message; rerender(); }
+}
+
+// v2.31: notitie bewerken
+function startNote(slug, w) {
+  vs.note = { slug, week: w, value: w.notitie || '' };
+  rerender();
+}
+async function confirmNote() {
+  if (!vs.note) return;
+  vs.loading = true; rerender();
+  try {
+    await updateWeekNotitie(vs.note.week.id, vs.note.value.trim() || null);
+    vs.note = null;
+    await loadAll();
+  } catch (err) { vs.error = err.message; vs.loading = false; rerender(); }
+}
+
+// v2.31: lege eigen week vooruit toevoegen
+function startPlanNew(slug) {
+  const t = todayInfo();
+  const next = t.week + 1 > 52 ? { year: t.year + 1, week: 1 } : { year: t.year, week: t.week + 1 };
+  vs.planNew = { slug, year: next.year, week: next.week };
+  rerender();
+}
+async function confirmPlanNew() {
+  if (!vs.planNew) return;
+  vs.loading = true; rerender();
+  try {
+    const profile = vs.profiles[vs.planNew.slug];
+    let wk = await getWeek(profile.id, vs.planNew.year, vs.planNew.week);
+    if (!wk) wk = await addWeek({ ownerId: profile.id, year: vs.planNew.year, week: vs.planNew.week, source: 'eigen' });
+    vs.planNew = null;
+    await loadAll();
+    openWeek(wk.year, wk.week_nr);
+  } catch (err) { vs.error = err.message; vs.loading = false; rerender(); }
+}
+
+// v2.31: boodschappenlijst voor deze week openen
+function openShopping(w) {
+  gotoShoppingWeek(w.year, w.week_nr);
+  setRoute('lijst');
 }
 
 // Standaard 3 hues voor mosaic (varieert subtiel per week-id voor visuele variatie)
@@ -102,6 +157,7 @@ export function LibraryView(state) {
         <div class="filter-bar">
           ${[
             { id: 'all',     label: 'Alles' },
+            { id: 'fav',     label: '★ Favorieten' },
             { id: 'dietist', label: 'Diëtist alleen' },
             { id: 'eigen',   label: 'Zelf gemaakt' },
           ].map(f => html`
@@ -117,6 +173,8 @@ export function LibraryView(state) {
       ${renderMaintenancePanel()}
 
       ${vs.dup ? renderDupModal() : nothing}
+      ${vs.note ? renderNoteModal() : nothing}
+      ${vs.planNew ? renderPlanModal() : nothing}
     </section>
 
     <style>
@@ -177,6 +235,29 @@ export function LibraryView(state) {
         border-radius: 0;
       }
       .mosaic .ph:nth-child(1) { grid-row: 1 / 3; }
+      .mosaic .ph.photo { background-size: cover; background-position: 50% 55%; background-repeat: no-repeat; }
+
+      .mosaic-wrap { position: relative; cursor: pointer; }
+      .fav-btn {
+        position: absolute; top: 8px; right: 8px;
+        width: 30px; height: 30px; border-radius: 999px;
+        background: var(--bg); border: 1px solid var(--line);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 16px; line-height: 1; cursor: pointer; color: var(--ink-3);
+        box-shadow: 0 1px 3px oklch(0% 0 0 / 0.18);
+      }
+      .fav-btn:hover { transform: scale(1.1); }
+      .fav-btn.is-on { color: oklch(72% 0.16 70); }
+
+      .plan-chip { cursor: pointer; height: 26px; font-size: 12px; margin-left: 12px; }
+
+      .wb-bar { height: 6px; background: var(--bg-2); border-radius: 999px; overflow: hidden; margin: 2px 0; }
+      .wb-bar-fill { height: 100%; background: var(--ink-3); border-radius: 999px; }
+      .wb-note { font-size: 12px; color: var(--ink-2); background: var(--bg-2); border-radius: var(--r-sm); padding: 6px 8px; cursor: pointer; }
+      .wb-note:hover { background: var(--bg-3); }
+      .wb-note-add { font: inherit; font-size: 12px; color: var(--ink-3); background: none; border: none; padding: 2px 0; cursor: pointer; text-align: left; text-decoration: underline; }
+      .wb-note-add:hover { color: var(--ink-2); }
+      .wb-actions .chip { cursor: pointer; }
 
       .week-card-body {
         padding: 16px 18px 18px;
@@ -199,7 +280,7 @@ export function LibraryView(state) {
       }
       .mp-modal h3 { font-size: 22px; }
       .mp-modal label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
-      .mp-modal input { padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line-2); font: inherit; }
+      .mp-modal input, .mp-modal select { padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line-2); font: inherit; background: var(--bg); color: var(--ink); }
       .mp-modal .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .mp-modal .row.right { display: flex; justify-content: flex-end; gap: 8px; }
       .mp-modal .warn { color: oklch(40% 0.14 28); font-size: 13px; }
@@ -212,17 +293,20 @@ function renderSlugSection(slug) {
   let weeks = vs.weeks[slug] || [];
   if (vs.filter === 'dietist') weeks = weeks.filter(w => w.source === 'dietist');
   else if (vs.filter === 'eigen') weeks = weeks.filter(w => w.source === 'eigen');
+  else if (vs.filter === 'fav') weeks = weeks.filter(w => w.favoriet);
 
   if (!profile) return html`<div class="empty">Profiel "${slug}" nog niet aangemaakt.</div>`;
-  if (weeks.length === 0) {
-    return html`<div class="empty">
-      <p>Geen ${vs.filter === 'all' ? '' : vs.filter + '-'}weken voor ${profile.naam}.</p>
-    </div>`;
-  }
 
   return html`
     <div class="slug-block">
-      <div class="block-head"><span class="dot ${slug}"></span> ${profile.naam} <span class="cmt" style="margin-left:auto;">${weeks.length} weken</span></div>
+      <div class="block-head">
+        <span class="dot ${slug}"></span> ${profile.naam}
+        <button class="chip plan-chip" @click=${() => startPlanNew(slug)}>+ week vooruit plannen</button>
+        <span class="cmt" style="margin-left:auto;">${weeks.length} weken</span>
+      </div>
+      ${weeks.length === 0
+        ? html`<div class="empty"><p>Geen ${vs.filter === 'all' ? '' : vs.filter + '-'}weken voor ${profile.naam}.</p></div>`
+        : html``}
       <div class="week-grid">
         ${weeks.map(w => renderWeekCard(slug, w))}
       </div>
@@ -234,13 +318,25 @@ function renderWeekCard(slug, w) {
   const count = vs.slotCounts[w.id] || 0;
   const today = todayInfo();
   const isCurrent = today.year === w.year && today.week === w.week_nr;
+  const covers = vs.covers[w.id] || [];
   const hues = mosaicHues(w.id, w.source);
+  // v2.31: foto-mozaïek als er foto's zijn; anders terug naar gekleurde vlakken.
+  const mosaic = covers.length
+    ? html`<div class="mosaic">
+        ${[0, 1, 2].map(i => covers[i]
+          ? html`<div class="ph photo" style="background-image:url('${covers[i]}');"></div>`
+          : html`<div class="ph" style="--ph-stripe-a: oklch(92% 0.05 ${hues[i] ?? 80}); --ph-stripe-b: oklch(86% 0.09 ${hues[i] ?? 80});"></div>`)}
+      </div>`
+    : html`<div class="mosaic">
+        ${hues.map(h => html`<div class="ph" style="--ph-stripe-a: oklch(92% 0.05 ${h}); --ph-stripe-b: oklch(86% 0.09 ${h});"></div>`)}
+      </div>`;
+  const pct = Math.round((count / 42) * 100);
   return html`
-    <button class="week-card ${isCurrent ? 'is-current' : ''}" @click=${() => openWeek(w.year, w.week_nr)}>
-      <div class="mosaic">
-        ${hues.map(h => html`
-          <div class="ph" style="--ph-stripe-a: oklch(92% 0.05 ${h}); --ph-stripe-b: oklch(86% 0.09 ${h});"></div>
-        `)}
+    <div class="week-card ${isCurrent ? 'is-current' : ''}">
+      <div class="mosaic-wrap" @click=${() => openWeek(w.year, w.week_nr)}>
+        ${mosaic}
+        <button class="fav-btn ${w.favoriet ? 'is-on' : ''}" title=${w.favoriet ? 'Favoriet — klik om te verwijderen' : 'Markeer als favoriet'}
+          @click=${(e) => { e.stopPropagation(); toggleFav(w); }}>${w.favoriet ? '★' : '☆'}</button>
       </div>
       <div class="week-card-body">
         <div class="wb-row">
@@ -249,14 +345,19 @@ function renderWeekCard(slug, w) {
             ? html`<span class="chip leaf" style="height:20px; font-size: 10px; padding: 0 8px;">✓ diëtist</span>`
             : html`<span class="chip mustard" style="height:20px; font-size: 10px; padding: 0 8px;">eigen</span>`}
         </div>
-        <div class="wb-title">${formatWeekRange(w.year, w.week_nr)}</div>
+        <div class="wb-title" @click=${() => openWeek(w.year, w.week_nr)} style="cursor:pointer;">${formatWeekRange(w.year, w.week_nr)}</div>
+        <div class="wb-bar" title="${count}/42 slots gevuld"><div class="wb-bar-fill" style="width:${pct}%;"></div></div>
         <div class="wb-meta">${count}/42 slots gevuld</div>
+        ${w.notitie
+          ? html`<div class="wb-note" @click=${() => startNote(slug, w)}>📝 ${w.notitie}</div>`
+          : html`<button class="wb-note-add" @click=${() => startNote(slug, w)}>+ notitie</button>`}
         <div class="wb-actions">
-          <span class="chip">Open →</span>
-          <span class="chip" @click=${(e) => { e.stopPropagation(); startDuplicate(slug, w); }}>Dupliceer</span>
+          <span class="chip" @click=${() => openWeek(w.year, w.week_nr)}>Open →</span>
+          <span class="chip" @click=${() => startDuplicate(slug, w)}>Kopieer naar…</span>
+          <span class="chip" @click=${() => openShopping(w)}>Boodschappen</span>
         </div>
       </div>
-    </button>
+    </div>
   `;
 }
 
@@ -268,6 +369,12 @@ function renderDupModal() {
         <p style="color: var(--ink-2); font-size: 13px;">
           Kopieer alle maaltijden van week ${vs.dup.srcWeek.week_nr} (${vs.dup.srcWeek.year}) van ${vs.profiles[vs.dup.srcSlug].naam} naar:
         </p>
+        <label>Voor wie
+          <select @change=${(e) => { vs.dup.dstSlug = e.target.value; }}>
+            ${['peter', 'miranda'].map(s => vs.profiles?.[s]
+              ? html`<option value=${s} ?selected=${s === vs.dup.dstSlug}>${vs.profiles[s].naam}</option>` : nothing)}
+          </select>
+        </label>
         <div class="row">
           <label>Jaar
             <input type="number" min="2024" max="2030" .value=${vs.dup.year}
@@ -282,6 +389,51 @@ function renderDupModal() {
         <div class="row right">
           <button class="btn ghost" @click=${() => { vs.dup = null; rerender(); }}>annuleer</button>
           <button class="btn" @click=${confirmDuplicate} ?disabled=${vs.loading}>kopieer →</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderNoteModal() {
+  return html`
+    <div class="mp-backdrop" @click=${() => { vs.note = null; rerender(); }}>
+      <div class="mp-modal" @click=${(e) => e.stopPropagation()}>
+        <h3 class="display">Notitie</h3>
+        <p style="color: var(--ink-2); font-size: 13px;">Week ${vs.note.week.week_nr} (${vs.note.week.year}) — ${vs.profiles[vs.note.slug].naam}</p>
+        <label>Notitie
+          <input type="text" placeholder="bv. verjaardag, weinig tijd, restjes"
+            .value=${vs.note.value}
+            @input=${(e) => { vs.note.value = e.target.value; }} />
+        </label>
+        <div class="row right">
+          <button class="btn ghost" @click=${() => { vs.note = null; rerender(); }}>annuleer</button>
+          <button class="btn" @click=${confirmNote} ?disabled=${vs.loading}>opslaan</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPlanModal() {
+  return html`
+    <div class="mp-backdrop" @click=${() => { vs.planNew = null; rerender(); }}>
+      <div class="mp-modal" @click=${(e) => e.stopPropagation()}>
+        <h3 class="display">Week vooruit plannen</h3>
+        <p style="color: var(--ink-2); font-size: 13px;">Maak een lege eigen week aan voor ${vs.profiles[vs.planNew.slug].naam} en open hem om te vullen.</p>
+        <div class="row">
+          <label>Jaar
+            <input type="number" min="2024" max="2030" .value=${vs.planNew.year}
+              @input=${(e) => { vs.planNew.year = parseInt(e.target.value, 10) || vs.planNew.year; }} />
+          </label>
+          <label>Week
+            <input type="number" min="1" max="52" .value=${vs.planNew.week}
+              @input=${(e) => { vs.planNew.week = parseInt(e.target.value, 10) || vs.planNew.week; }} />
+          </label>
+        </div>
+        <div class="row right">
+          <button class="btn ghost" @click=${() => { vs.planNew = null; rerender(); }}>annuleer</button>
+          <button class="btn" @click=${confirmPlanNew} ?disabled=${vs.loading}>maak + open →</button>
         </div>
       </div>
     </div>

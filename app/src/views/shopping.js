@@ -145,6 +145,15 @@ function ensureInit() {
   appActions.setViewWeek(vs.year, vs.week);
 }
 
+// v2.31: spring naar de boodschappenlijst van een specifieke week (vanuit het archief).
+export function gotoShoppingWeek(year, weekNr) {
+  ensureInit();
+  vs.year = year;
+  vs.week = weekNr;
+  appActions.setViewWeek(year, weekNr);
+  loadAll();
+}
+
 async function loadNotes() {
   try { vs.notes = await listOpenNotes(); rerender(); }
   catch (err) { vs.error = err.message; rerender(); }

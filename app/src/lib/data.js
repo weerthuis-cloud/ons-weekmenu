@@ -167,13 +167,55 @@ export async function getWeek(ownerId, year, week) {
 }
 
 export async function listWeeks({ ownerId } = {}) {
-  let q = supabase.from('weeks').select('id, owner, year, week_nr, source, notitie, created_at')
+  let q = supabase.from('weeks').select('id, owner, year, week_nr, source, notitie, favoriet, created_at')
     .order('year', { ascending: false })
     .order('week_nr', { ascending: false });
   if (ownerId) q = q.eq('owner', ownerId);
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
+}
+
+// v2.31: favoriet-vlag op een week toggelen.
+export async function setWeekFavoriet(weekId, favoriet) {
+  const { error } = await supabase.from('weeks').update({ favoriet }).eq('id', weekId);
+  if (error) throw error;
+  cache.weeks.clear();
+  notify('weeks');
+}
+
+// v2.31: notitie van een week bijwerken.
+export async function updateWeekNotitie(weekId, notitie) {
+  const { error } = await supabase.from('weeks').update({ notitie }).eq('id', weekId);
+  if (error) throw error;
+  cache.weeks.clear();
+  notify('weeks');
+}
+
+// v2.31: per week een paar receptfoto's voor de archief-mozaïek (diners eerst).
+export async function weekCoverImages(weekIds) {
+  if (!weekIds?.length) return {};
+  const { data, error } = await supabase
+    .from('week_meals')
+    .select('week_id, slot, meal:meals(image_url)')
+    .in('week_id', weekIds);
+  if (error) throw error;
+  const order = { diner: 0, lunch: 1, ontbijt: 2, snack_avond: 3, snack_middag: 4, snack_ochtend: 5 };
+  const byWeek = {};
+  for (const r of data || []) {
+    const url = r.meal?.image_url;
+    if (!url) continue;
+    (byWeek[r.week_id] ||= []).push({ url, rank: order[r.slot] ?? 9 });
+  }
+  const out = {};
+  for (const [wid, arr] of Object.entries(byWeek)) {
+    const seen = new Set();
+    out[wid] = arr.sort((a, b) => a.rank - b.rank)
+      .map(x => x.url)
+      .filter(u => (seen.has(u) ? false : (seen.add(u), true)))
+      .slice(0, 3);
+  }
+  return out;
 }
 
 // Tel ingevulde slots per week (één query)
