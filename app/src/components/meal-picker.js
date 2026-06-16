@@ -49,6 +49,19 @@ const PICKER_CUISINES = ['', 'italiaans', 'mexicaans', 'aziatisch', 'indiaas', '
 const PICKER_HOOFD    = ['', 'kip', 'rund', 'varken', 'lam', 'vis', 'vegetarisch', 'pasta', 'rijst', 'aardappel', 'brood', 'ei', 'zuivel'];
 const PICKER_KOOKWIJZE= ['oven', 'airfryer', 'eenpans', 'traybake', 'wok', 'soep', 'salade', 'grill', 'pasta', 'stamppot', 'slowcooker', 'smoothie'];
 const PICKER_DIEET    = ['eiwitrijk', 'koolhydraatrijk', 'vezelrijk', 'keto', 'vegetarisch', 'vegan', 'glutenvrij', 'lactosevrij', 'koolhydraatarm'];
+// v2.25: max-kooktijd-buckets voor de filterbalk in kies-modus. [waarde, label, test].
+const PICKER_KOOKTIJD = [
+  ['', '— geen limiet —', () => true],
+  ['15', '≤ 15 min', (t) => t != null && t <= 15],
+  ['30', '≤ 30 min', (t) => t != null && t <= 30],
+  ['45', '≤ 45 min', (t) => t != null && t <= 45],
+  ['60', '≤ 60 min', (t) => t != null && t <= 60],
+];
+
+// v2.25: lege/begin-staat voor de filters in kies-modus.
+function emptyFilters() {
+  return { dieet: new Set(), kookwijze: new Set(), cuisine: '', hoofd: '', maxTijd: '', favoriet: false };
+}
 
 const HOST_ID = '__meal_picker_host';
 
@@ -58,6 +71,8 @@ const ui = {
   slot: null,       // 'ontbijt' | etc.
   editing: null,    // meal-row in edit-modus
   search: '',
+  filters: emptyFilters(),  // v2.25: extra filters in kies-modus
+  filtersOpen: false,       // v2.25: inklapbare filterbalk
   meals: [],
   onPick: null,
   onSaved: null,    // edit-callback
@@ -88,6 +103,8 @@ export async function openMealPicker({ slot, suggestedSuitableFor = 'beiden', on
   ui.slot = slot;
   ui.editing = null;
   ui.search = '';
+  ui.filters = emptyFilters();
+  ui.filtersOpen = false;
   ui.error = null;
   ui.onPick = onPick;
   ui.onSaved = null;
@@ -210,15 +227,58 @@ function removeIngredientRow(i) {
   rerender();
 }
 
+// v2.25: filter-helpers voor kies-modus.
+function toggleFilterSet(key, val) {
+  const set = ui.filters[key];
+  if (set.has(val)) set.delete(val); else set.add(val);
+  rerender();
+}
+
+function clearFilters() {
+  ui.filters = emptyFilters();
+  rerender();
+}
+
+function activeFilterCount() {
+  const f = ui.filters;
+  return f.dieet.size + f.kookwijze.size
+    + (f.cuisine ? 1 : 0) + (f.hoofd ? 1 : 0) + (f.maxTijd ? 1 : 0) + (f.favoriet ? 1 : 0);
+}
+
+// Past de extra filters toe (semantiek gespiegeld aan Bibliotheek: multi = AND, enkel = gelijkheid).
+function applyExtraFilters(list) {
+  const f = ui.filters;
+  return list.filter(m => {
+    if (f.cuisine && m.cuisine !== f.cuisine) return false;
+    if (f.hoofd && m.hoofdingredient !== f.hoofd) return false;
+    if (f.kookwijze.size) {
+      const ms = m.kookwijze || [];
+      if (![...f.kookwijze].every(k => ms.includes(k))) return false;
+    }
+    if (f.dieet.size) {
+      const ms = m.dieet || [];
+      if (![...f.dieet].every(k => ms.includes(k))) return false;
+    }
+    if (f.maxTijd) {
+      const bucket = PICKER_KOOKTIJD.find(b => b[0] === f.maxTijd);
+      if (bucket && !bucket[2](m.bereidingstijd)) return false;
+    }
+    if (f.favoriet && !m.favoriet) return false;
+    return true;
+  });
+}
+
 function view() {
   if (!ui.open) return null;
   const slotInfo = SLOT_BY_ID[ui.slot];
   const term = ui.search.trim().toLowerCase();
   // Filter eerst op slot-type: bij ontbijt-cell alleen ontbijt-meals.
   const slotMatched = ui.slot ? ui.meals.filter(m => m.type === ui.slot) : ui.meals;
-  const filtered = term
+  const byTerm = term
     ? slotMatched.filter(m => m.name.toLowerCase().includes(term))
     : slotMatched;
+  const filtered = applyExtraFilters(byTerm);
+  const nActive = activeFilterCount();
   const isEdit = ui.mode === 'edit';
   const headerLead = ui.mode === 'pick' ? 'Kies bestaande maaltijd of maak een nieuwe.'
                   : isEdit               ? `Bewerk "${ui.editing?.name ?? '...'}"`
@@ -246,9 +306,69 @@ function view() {
             @input=${(e) => { ui.search = e.target.value; rerender(); }}
             autofocus
           />
+
+          <div class="mp-filterbar">
+            <button type="button" class="mp-filtertoggle ${nActive ? 'is-on' : ''}"
+              @click=${() => { ui.filtersOpen = !ui.filtersOpen; rerender(); }}>
+              <span>Filters${nActive ? html` <span class="mp-badge">${nActive}</span>` : ''}</span>
+              <span class="mp-caret">${ui.filtersOpen ? '▴' : '▾'}</span>
+            </button>
+            ${nActive ? html`<button type="button" class="mp-clear" @click=${clearFilters}>wis</button>` : ''}
+            <span class="mp-count">${filtered.length} resultaat${filtered.length === 1 ? '' : 'en'}</span>
+          </div>
+
+          ${ui.filtersOpen ? html`
+            <div class="mp-filters">
+              <div class="mp-frow">
+                <label class="mp-fsel">
+                  <span>Keuken</span>
+                  <select .value=${ui.filters.cuisine}
+                    @change=${(e) => { ui.filters.cuisine = e.target.value; rerender(); }}>
+                    ${PICKER_CUISINES.map(c => html`<option value=${c} ?selected=${c === ui.filters.cuisine}>${c || 'alle'}</option>`)}
+                  </select>
+                </label>
+                <label class="mp-fsel">
+                  <span>Hoofdingrediënt</span>
+                  <select .value=${ui.filters.hoofd}
+                    @change=${(e) => { ui.filters.hoofd = e.target.value; rerender(); }}>
+                    ${PICKER_HOOFD.map(h => html`<option value=${h} ?selected=${h === ui.filters.hoofd}>${h || 'alle'}</option>`)}
+                  </select>
+                </label>
+                <label class="mp-fsel">
+                  <span>Max kooktijd</span>
+                  <select .value=${ui.filters.maxTijd}
+                    @change=${(e) => { ui.filters.maxTijd = e.target.value; rerender(); }}>
+                    ${PICKER_KOOKTIJD.map(b => html`<option value=${b[0]} ?selected=${b[0] === ui.filters.maxTijd}>${b[1]}</option>`)}
+                  </select>
+                </label>
+              </div>
+              <div class="mp-fgroup">
+                <span class="mp-flabel">Dieet</span>
+                <div class="mp-chips">
+                  ${PICKER_DIEET.map(d => html`
+                    <button type="button" class="mp-chip ${ui.filters.dieet.has(d) ? 'is-on' : ''}"
+                      @click=${() => toggleFilterSet('dieet', d)}>${d}</button>`)}
+                </div>
+              </div>
+              <div class="mp-fgroup">
+                <span class="mp-flabel">Kookwijze</span>
+                <div class="mp-chips">
+                  ${PICKER_KOOKWIJZE.map(k => html`
+                    <button type="button" class="mp-chip ${ui.filters.kookwijze.has(k) ? 'is-on' : ''}"
+                      @click=${() => toggleFilterSet('kookwijze', k)}>${k}</button>`)}
+                </div>
+              </div>
+              <label class="mp-fav inline">
+                <input type="checkbox" ?checked=${ui.filters.favoriet}
+                  @change=${(e) => { ui.filters.favoriet = e.target.checked; rerender(); }} />
+                Alleen favorieten
+              </label>
+            </div>
+          ` : ''}
+
           <ul class="mp-list">
             ${filtered.length === 0 ? html`
-              <li class="empty">Geen maaltijden gevonden${term ? ` voor "${term}"` : ''}.</li>
+              <li class="empty">Geen maaltijden gevonden${term ? ` voor "${term}"` : ''}${nActive ? ' met deze filters' : ''}.</li>
             ` : filtered.map(m => html`
               <li>
                 <button class="mp-meal" @click=${() => pick(m)}>
@@ -474,6 +594,52 @@ function view() {
       .mp-meal:hover { background: var(--bg-3); }
       .name { font-weight: 600; }
       .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-3); flex-wrap: wrap; }
+
+      /* v2.25: filterbalk in kies-modus */
+      .mp-filterbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .mp-filtertoggle {
+        font: inherit; font-size: 13px; cursor: pointer;
+        display: flex; align-items: center; gap: 8px;
+        background: var(--bg-2); border: 1px solid var(--line);
+        border-radius: var(--r-md); padding: 7px 12px; color: var(--ink-2);
+      }
+      .mp-filtertoggle.is-on { border-color: var(--ink); color: var(--ink); }
+      .mp-filtertoggle:hover { background: var(--bg-3); }
+      .mp-caret { color: var(--ink-3); font-size: 11px; }
+      .mp-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+        background: var(--ink); color: var(--bg); font-size: 11px; font-weight: 600;
+      }
+      .mp-clear {
+        font: inherit; font-size: 12px; cursor: pointer; color: var(--ink-3);
+        background: none; border: none; text-decoration: underline; padding: 4px 2px;
+      }
+      .mp-clear:hover { color: var(--ink); }
+      .mp-count { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+      .mp-filters {
+        display: flex; flex-direction: column; gap: 12px;
+        background: var(--bg-2); border: 1px solid var(--line);
+        border-radius: var(--r-md); padding: 12px;
+      }
+      .mp-frow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+      .mp-fsel { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-3); }
+      .mp-fsel select { padding: 7px 8px; font-size: 13px; }
+      .mp-fgroup { display: flex; flex-direction: column; gap: 6px; }
+      .mp-flabel { font-size: 12px; color: var(--ink-3); }
+      .mp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .mp-chip {
+        font: inherit; font-size: 12px; cursor: pointer;
+        background: var(--bg); border: 1px solid var(--line-2);
+        border-radius: 999px; padding: 5px 11px; color: var(--ink-2);
+      }
+      .mp-chip:hover { background: var(--bg-3); }
+      .mp-chip.is-on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+      .mp-fav { font-size: 13px; color: var(--ink-2); }
+      @media (max-width: 480px) {
+        .mp-frow { grid-template-columns: 1fr; }
+        .mp-count { margin-left: 0; width: 100%; }
+      }
 
       form { display: flex; flex-direction: column; gap: 12px; }
       form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }

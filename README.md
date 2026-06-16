@@ -4,7 +4,9 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.22** (Week 22 import: 7 nieuwe diners + 34 solo-meals + 56 week_meal-koppelingen voor Peter en Miranda. Macros via eigen NEVO-berekening in xlsx-rapport `outputs/week22_macros.xlsx` (5 sheets, 1120 formules). 921 actief, 633 diners).
+Huidige versie: **v2.25** (filterbalk in de maaltijd-picker). In kies-modus kun je naast naam-zoeken nu filteren op keuken, hoofdingrediënt, max kooktijd, dieet, kookwijze en favoriet, met resultaatteller en wis-knop. Inklapbaar en mobielvriendelijk. Filterlogica gespiegeld aan de Bibliotheek, volledig client-side (geen externe calls). Helpt bij het vooruit plannen van eigen weken. `version.js` stond nog op v2.23 en is meegehoogd naar v2.25.
+
+Vorige: v2.24 (Week 25 automatische import, diëtist-week 7 = kalenderweek 25, ma 15 t/m zo 21 juni 2026; eerste testrun auto-import vanuit Gmail/Drive: 7 diners + 35 solo-meals + 56 week_meal-koppelingen, macros via NEVO in `outputs/week25_macros.xlsx`, 972 meals actief), v2.23 (week 23 import + image_url-backfill), v2.22 (week 22 import).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -36,6 +38,7 @@ Versies in volgorde:
 - v2.7a–c Bereidingswijze + beschrijving + bron-URL in meal-editor; ingrediënten boven bereiding; auto-growing textarea zonder scrollbalk; macro-cellen horizontaal in 1 rij — klaar
 - v2.8 meals.image_url + re-scrape Recipe.image (418/464 dekking); meal-card toont foto met lazy-load en no-referrer — klaar
 - v2.22 Week 22 import (25-31 mei): 7 nieuwe diners + 34 solo-meals + 56 week_meal-koppelingen. Macros voor het eerst zelf berekend uit NEVO-database in plaats van compute_meal_macros() — xlsx-rapport met formules voor narekenen — klaar
+- v2.25 Filterbalk in de maaltijd-picker (kies-modus): keuken, hoofdingrediënt, max kooktijd, dieet, kookwijze, favoriet + resultaatteller + wis-knop; inklapbaar, mobielvriendelijk, logica gespiegeld aan Bibliotheek — klaar
 
 ## Architectuur
 
@@ -110,16 +113,18 @@ Soft check: e-mailadressen staan in `VITE_ALLOWED_EMAILS` (env-var, komma-gesche
 
 Strikte check (na onboarding): zet in het Supabase-dashboard onder **Authentication → Sign In / Up → Email** de optie "Allow new users to sign up" uit. Vanaf dat moment kunnen alleen bestaande `auth.users` nog inloggen.
 
-## Wekelijkse routine (PDF-import)
+## Wekelijkse routine (automatische import)
 
-1. Open Cowork met dit project.
-2. Sleep de PDF van de diëtist in de chat.
-3. Typ "importeer".
-4. Bevestig persoon en weeknummer.
-5. Claude schrijft alles direct in Supabase via MCP.
-6. Open de app op telefoon of laptop → de week is gevuld.
+De diëtist (Choose Your Diet, `voedingsschema@chooseyourdiet.nl`) mailt elke vrijdag rond 06:00 twee schema's naar `devlindegoede@gmail.com`, één voor Peter en één voor Miranda, elk met een schema-PDF en een receptenboek-PDF.
 
-Tijd: ongeveer 2 minuten. Geen kopieer-en-plak, geen handmatige typen.
+Automatische keten (binnen Google, AVG-bewust):
+
+1. Apps Script `automation/gmail-to-drive.gs` zet de PDF's wekelijks in de Drive-map "Weekmenu PDFs" (zie `automation/SETUP-gmail-to-drive.md`).
+2. De Drive-koppeling en Gmail-koppeling in Cowork staan op hetzelfde account (`devlindegoede@gmail.com`), zodat de import de PDF's als tekst kan lezen.
+3. De wekelijkse Cowork-taak leest de PDF's, mapt diëtist-week N naar de kalenderweek uit de PDF, berekent macro's via NEVO, kiest foto's, en schrijft weeks + week_meals naar Supabase.
+4. Voor elke schrijfbeurt eerst een backup in `backups/`, daarna versie-bump en een macro-rapport in `outputs/`. Afsluitend de 4-veld-smoketest (0 cellen zonder ingrediënten/foto/kcal).
+
+Diners zijn voor Peter en Miranda identiek (`suitable_for ['beiden']`); ontbijt, lunch en tussendoor verschillen per persoon. Nieuwe maaltijden krijgen een tag `WK<nr>_LOOKUP_*` (diner) of `WK<nr>_SOLO_*` (solo) zodat een week terug te rollen is.
 
 Backup-route (als Cowork niet beschikbaar is): in de Import-tab van de app kun je zelf een PDF uploaden. Pdf.js parseert client-side. Best-effort, vereist handmatige correctie.
 

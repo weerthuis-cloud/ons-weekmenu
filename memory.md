@@ -4,6 +4,71 @@ Chronologisch logboek van beslissingen, redenering en lessen. Elke nieuwe versie
 
 ---
 
+## 2026-06-14 — v2.24 (week 25: eerste automatische import + Drive-brug)
+
+**Aanleiding.** Peter wil dat het wekelijkse diëtist-menu automatisch in de app komt in plaats van handmatig PDF-slepen. Testrun op diëtist-week 7 (= kalenderweek 25, ma 15 t/m zo 21 juni 2026; de PDF vermeldt zelf "W 25").
+
+**Bron en account-topologie.** Afzender `voedingsschema@chooseyourdiet.nl`, elke vrijdag ~06:00, twee mails (Peter + Miranda), elk met schema-PDF + receptenboek-PDF (4 PDF's/week). Mails komen binnen op `devlindegoede@gmail.com` (gedeeld account), niet op weerthuis. Gmail-connector = devlindegoede; Drive-connector stond eerst op weerthuis. Opgelost door in Cowork de Drive van devlindegoede te koppelen. Sharing/koppeling tussen accounts moet Peter zelf doen (AVG, en Claude mag geen deelrechten zetten).
+
+**Brug.** `automation/gmail-to-drive.gs` (Apps Script onder devlindegoede) zet de bijlagen wekelijks in Drive-map "Weekmenu PDFs". Binnen Google, geen externe verwerker. Setup in `automation/SETUP-gmail-to-drive.md`. Voor de testrun de 4 week-25-PDF's via "Alles toevoegen aan Drive" klaargezet; daarna leest de Drive-connector ze als tekst.
+
+**Gedaan (import week 25).**
+- 7 diners (gedeeld, `suitable_for ['beiden']`, serves=4): zoete-aardappelcurry met witvis, rendang, spinaziestamppot, couscoussalade, chicken chiliwraps, gemarineerde zalm met noedels, healthy kapsalon. Ingrediënten + bereidingswijze uit het receptenboek; macros via Python+NEVO per portie (470–731 kcal). Tags `WK25_LOOKUP_*`.
+- 17 solo-meals Peter + 18 solo-meals Miranda (ontbijt/lunch/snack_avond), gededupliceerd binnen de week, serves=null, tags `WK25_SOLO_*`.
+- 2 weeks-rijen (2026 wk25) + 56 week_meals (28 per persoon). Peter/Miranda hadden geen ochtend/middag-tussendoor deze week.
+- Macro-rapport `outputs/week25_macros.xlsx`. Backup `backups/pre_wk25_2026.json`.
+
+**Smoketest (groen).** 56 cellen, 0 zonder ingrediënten, 0 zonder image_url, 0 zonder kcal. 42 nieuwe meals.
+
+**Beslissingen / aandachtspunten.**
+1. Diëtist-weeknr ≠ kalenderweek; map op de "W <nr>" in de PDF (week 7 → 25). Bij twijfel seinen, niet gokken.
+2. Foto's zijn Unsplash-placeholders per type/gerecht (zoals v2.23), nog niet de exacte receptfoto.
+3. Miranda's schema-PDF lijnt kolommen lastig uit bij screenshot-lezen; haar ontbijt/lunch zijn best-effort en moeten door Peter in de app nagelopen worden. "Groente naar keuze" en "Beleg" zijn generieke macroschattingen.
+4. Volautomatisch schrijven was Peters keuze; veiligheidsnet = backup vooraf + tags + smoketest + controle achteraf in de app.
+
+**Nog te doen.** Apps Script-trigger aanzetten (vrijdag 07:00) en de wekelijkse Cowork-taak vastzetten zodra Peter de testrun-weken heeft goedgekeurd. Zie [[project_weekmenu_auto_import]].
+
+---
+
+## 2026-05-31 — v2.23 (week 23 import + image_url-backfill)
+
+**Aanleiding.** Wekelijkse PDF-import van diëtist voor week 23. Bij voorbereiding viel op dat alle 34 WK22-solo-meals `image_url=null` hadden. Peter's expliciete feedback: "vergeet niet passende plaatjes bij de recepten te zoeken. De vorige keer was je de ingredienten van het ontbijt en lunch vergeten erin te zetten". De ingredient-jsonbs bleken bij WK22 wél gevuld (de v2.22-hotfix loste serves=null op zodat ze in de boodschappenlijst kwamen), maar visueel waren ontbijt/lunch leeg in de bibliotheek. Daarom in v2.23 niet alleen WK23 importeren, maar ook backfill van image_url op alle 34 WK22-solo-meals.
+
+**Gedaan.**
+- 7 nieuwe diners (ma-zo): kip+rijst+boemboe, pita currygehakt, indiase kip+bloemkool+rijst, spaanse aardappeltortilla, pasta pesto kip+broccoli, patatas bravas+biefstuk, pappardelle+asperges+zalm. `serves=4`, `suitable_for=['beiden']`, image_url uit Unsplash, tags `WK23_LOOKUP_<key>`. Macros zelf berekend (Python+NEVO, zelfde aanpak v2.22).
+- 4 nieuwe solo-meals (Peter Do/Vr lunch + Za snack, Miranda Do lunch). De andere 38 cellen hergebruiken bestaande WK22-solo-meals na dedup op exacte (ingredient,qty,unit)-set. Solo's expliciet `serves=null` om v2.22-hotfix-regel te respecteren.
+- 34 WK22-solo-meals: image_url backfill via single UPDATE met VALUES-pattern. Per category-cluster één Unsplash-foto (ontbijt-bowl, smoothie, wrap, brood-beleg, omelet, noten, kefir, kaas-snack, etc. — 12 unieke patronen).
+- 2 weeks-rijen (peter + miranda voor 2026 wk23, source='dietist') + 56 week_meals via één CTE-insert (lookup op tags voor nieuwe meals + hardcoded UUIDs voor hergebruik).
+- xlsx-rapport in `outputs/week23_macros.xlsx` (12 meal-sheets + Totalen + VLOOKUP-controle).
+
+**Smoketest (alle 4 groen).**
+- 56 cellen / 42 unieke meals voor wk23.
+- 0 cellen zonder ingredient-rijen, 0 zonder image_url, 0 zonder kcal.
+- 0 solo-meals met `serves != null` (v2.22-bug niet herhaald), 14 diner-koppelingen met serves=4.
+- get_advisors: geen nieuwe security-lints.
+
+**Beslissingen.**
+1. **Hergebruik vs nieuw.** Solo-meals worden hergebruikt als (ingredient_name, qty, unit) over alle ingredients EXACT matcht met een bestaande WK22-meal. Bij verschillende qty (bv. 1 vs 0.8 wrap, 100g vs 50g kipfilet) nieuw aanmaken — verschillen tellen door in boodschappen en macros. Effect: 38/42 solo's hergebruikt, slechts 4 nieuw.
+2. **Backfill image_url WK22 ook.** Zou puur WK23 ook werken, maar als Peter terugkijkt op WK22 ziet hij ook lege tegels. Eén UPDATE meer is netto-verbetering. Toekomstige weken: image_url IS REQUIRED bij elke insert, anders blijft het patroon onbedoeld terugkomen.
+3. **Image-clustering.** Foto's per visueel patroon (yoghurt-bowl, wrap, omelet, ...), niet per unieke meal. Goed genoeg voor placeholder-niveau; later kan Peter via UI per meal vervangen.
+4. **Unsplash zonder per-foto verificatie.** Net als v2.22. Risico: enkele IDs kunnen 404 geven (dan toont app gebroken plaatje, breekt niets). Acceptabel voor placeholder.
+5. **Bonus "Salade met gerookte kip"** uit het receptenboek (week 23) niet geïmporteerd — staat niet in dagschema, zelfde regel als BBQ-bonus in v2.22.
+
+**Macros per portie diners (uit Totalen-sheet, zelf berekend uit NEVO 2023 + handmatige aanvullingen):**
+- D1 Kip rijst boemboe: 608 kcal / 34.8E / 92.4K / 11.8V
+- D2 Pita currygehakt: 659 / 33.6 / 98.3 / 12.0
+- D3 Indiase kip bloemkool rijst: 508 / 31.1 / 76.6 / 9.5
+- D4 Spaanse aardappeltortilla: 571 / 22.8 / 44.9 / 32.5
+- D5 Pasta pesto kip broccoli: 719 / 41.5 / 75.3 / 28.5
+- D6 Patatas bravas biefstuk: 612 / 38.4 / 49.7 / 31.4
+- D7 Pappardelle asperges zalm: 675 / 43.5 / 46.5 / 35.2
+
+**Stand na v2.23.** 930 meals actief (+11 nieuw), 640 diners (+7), 282 week_meals (+56), 10 weeks (+2). v2.18 backlog onveranderd (long-tail alias-meting, macro-aanvulling, pantry per profile, bibliotheek-uitbreiding).
+
+**Backup.** `backups/pre_wk23_v2.22.json` (counts + WK22-diner-image-urls + samenvatting solo's).
+
+---
+
 ## 2026-05-01 — start v0.1
 
 **Context.** Peter en Miranda krijgen wekelijks een menu van de dietist. Doel: tool om dat in te voeren, te bekijken (week/dag), boodschappen te genereren, archief op te bouwen, en eigen menu's samen te stellen met filters.
@@ -1294,3 +1359,49 @@ Voordeel: één tool-call, geen data-overdracht via Claude's context, geen escap
 - 3 BBQ-recepten als bonus toevoegen aan bibliotheek (zomerseizoen).
 - Unsplash-placeholderfoto's mogelijk vervangen door echte HTYPT-foto's als die beschikbaar komen.
 - Macro-rapport-pattern toepassen op week 21 retrospectief? Optioneel.
+
+---
+
+## 2026-05-24 — v2.22 hotfix (solo-meals serves=null voor boodschappenaggregator)
+
+**Symptoom.** Peter meldt: bij week 22 staan ingrediënten en hoeveelheden niet bij ontbijt, lunch en tussendoortjes. Specifiek bedoeld: ze ontbreken op de boodschappenlijst (in het meal-detail-paneel komen ze wel netjes door).
+
+**Oorzaak.** Bij de WK22-import zijn alle 34 solo-meals (ontbijt/lunch/snack_avond) met `serves = 1` aangemaakt. `lib/shopping.js` regel 86 slaat in de aggregator alle meals met `serves > 0` over (dat is bedoeld voor recipe-meals die via de per-recept akkoordflow lopen). Effect: de hele set ontbijt/lunch/snack-ingrediënten verdween stilletjes uit `aggregateShopping()`.
+
+**Conventie die nu hard wordt vastgelegd.** Solo-meals (type ∈ ontbijt/lunch/snack_avond) zonder `recipe`-tekst horen `serves = null` te hebben. `serves` is gereserveerd voor gedeelde recept-meals die via de portion-scaling flow lopen. Bij toekomstige imports: bij solo-meals expliciet `serves: null` zetten in de insert.
+
+**Fix uitgevoerd (data, geen code).** Eén SQL-update:
+```sql
+update meals
+set serves = null
+where type in ('ontbijt','lunch','snack_avond')
+  and recipe is null
+  and serves is not null and serves > 0;
+```
+Resultaat: 34 rijen geüpdate (= alle WK22-solo-meals). Filter `recipe is null` zorgde ervoor dat eventuele echte solo-recepten (bv. een ontbijtcake voor 4) niet werden geraakt — die hebben recipe-tekst en blijven met hun serves staan.
+
+**Backup.** `/backups/solo_meals_serves_backup_v2.22.json` bevat de 34 oude rijen (id, name, type, serves, recipe, tags) plus een restore-hint. Rollback per rij mogelijk.
+
+**Verificatie via SQL-simulatie van de aggregator.** Voor week 22 levert de groep-per-ingredient nu 41 unieke regels op uit alleen solo-meals, met o.a.:
+- Pecannoten 20 g, Cottagecheese 30 g, Kefir 400 g, Mandarijn 2 st, Kaas borrelhapje 48+ 40 g, Honing rauw 131 g
+- Hoge totalen omdat Peter+Miranda samen worden gerekend: Griekse yoghurt 10% 1950 g, Kwark magere 1200 g, Kwark volle 1100 g, Fruit (diepvries) 1000 g, Blauwe bessen/frambozen 700 g, Ei 24 st, Noten naar keuze 180 g.
+
+NB: dit is een ruwe SQL-aggregatie zonder de `normalizeName`/aliassen/cross-unit-merge die `lib/shopping.js` doet. In de echte UI zullen sommige regels nog samengevoegd worden (bv. magere + volle kwark blijven apart per v2.3-regel; "naar keuze" varianten kunnen mergen via v2.15-logica). Geen code aangeraakt, dus geen versiebump.
+
+**Geen wijziging in de UI van week/dag-overzicht.** De meal-cards in week- en dag-view tonen alleen meal-namen en kcal, geen ingrediënt-grammages. Detail-tap toont alles. Peter accepteert dit voor nu; eventuele uitbreiding van cards met grammages is een aparte UI-feature.
+
+**Lesson voor v2.22 schema-bevindingen.** Voeg expliciet toe aan de import-conventielijst: solo-meals krijgen `serves: null`, niet `1`. De `> 0`-filter in de aggregator is bedoeld als gatekeeper voor recipe-meals; iedere solo met serves > 0 wordt onzichtbaar voor de boodschappenlijst.
+
+## v2.25 — filterbalk in maaltijd-picker (16 juni 2026)
+
+**Aanleiding.** Peter wil weekmenu's vooruit plannen door uit de database ontbijt/lunch/diner in slots te plaatsen. De bestaande Weekweergave kan dit al voor toekomstige weken (lege cel → meal-picker → kies uit database, werkt op elke week via week-navigatie). Het echte gat zat in de picker zelf: in kies-modus alleen een naam-zoekveld plus de impliciete slot-typefilter.
+
+**Wijziging.** `components/meal-picker.js`: in kies-modus een inklapbare filterbalk toegevoegd onder het zoekveld. Filters: keuken (dropdown), hoofdingrediënt (dropdown), max kooktijd (buckets ≤15/30/45/60), dieet (chips, multi=AND), kookwijze (chips, multi=AND), favoriet (toggle). Plus resultaatteller en wis-knop, en een badge met aantal actieve filters op de toggle. Filterlogica gespiegeld aan `views/build.js` (Bibliotheek): multi-select = `.every()` (AND), enkelvoudig = gelijkheid. Constanten PICKER_CUISINES/HOOFD/KOOKWIJZE/DIEET bestonden al voor het invoerformulier en zijn hergebruikt; nieuw is PICKER_KOOKTIJD en emptyFilters().
+
+**AVG.** Geen punt: filtert client-side op al ingeladen meals, geen externe calls, geen leerlingdata (dit is een privé-huishoudtool sowieso).
+
+**Versie.** `version.js` stond nog op v2.23 terwijl README op v2.24 liep; meegehoogd naar v2.25. Backup van picker in `backups/meal-picker.v2.24.*.js`.
+
+**Verificatie.** node --check groen; vite build in schone sandbox-kopie (97 modules, geen fouten); losse logica-test van het filterpredicaat (7 cases, allemaal groen).
+
+**Open punt (los van deze taak).** Aperol Spritz en Aardbeien tiramisu verschijnen onder het ontbijt-slot in de picker → die meals staan met `type='ontbijt'` in de DB, waarschijnlijk verkeerd geclassificeerd. Apart nakijken indien gewenst.
