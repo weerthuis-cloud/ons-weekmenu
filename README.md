@@ -4,9 +4,9 @@ Webtool voor het huishouden van Peter en Miranda. Wekelijkse menu's van de dieti
 
 ## Status
 
-Huidige versie: **v2.25** (filterbalk in de maaltijd-picker). In kies-modus kun je naast naam-zoeken nu filteren op keuken, hoofdingrediënt, max kooktijd, dieet, kookwijze en favoriet, met resultaatteller en wis-knop. Inklapbaar en mobielvriendelijk. Filterlogica gespiegeld aan de Bibliotheek, volledig client-side (geen externe calls). Helpt bij het vooruit plannen van eigen weken. `version.js` stond nog op v2.23 en is meegehoogd naar v2.25.
+Huidige versie: **v2.27** (inplannen vanuit de Bibliotheek). Elke kaart en lijst-rij heeft een kalender-knop (📅); die opent een weekplanner-scherm (`meal-scheduler.js`) met persoon-keuze, een beiden-vinkje, week-navigatie en het volledige weekraster (7 dagen × 6 slots) met de bestaande planning. Klik een cel om het gerecht daar in te plannen; bestaat de week nog niet, dan wordt hij als eigen week aangemaakt. Slot-rijen die bij het type van het gerecht passen worden gemarkeerd. Het scherm blijft open zodat je op meerdere dagen kunt plannen.
 
-Vorige: v2.24 (Week 25 automatische import, diëtist-week 7 = kalenderweek 25, ma 15 t/m zo 21 juni 2026; eerste testrun auto-import vanuit Gmail/Drive: 7 diners + 35 solo-meals + 56 week_meal-koppelingen, macros via NEVO in `outputs/week25_macros.xlsx`, 972 meals actief), v2.23 (week 23 import + image_url-backfill), v2.22 (week 22 import).
+Vorige: v2.26 (type-knoppen in de picker + terugdraaien bij auto-genereren; database-onderhoud 11 misgeclassificeerde ontbijt-meals), v2.25 (filterbalk in de maaltijd-picker: keuken, hoofdingrediënt, max kooktijd, dieet, kookwijze, favoriet, met resultaatteller en wis-knop; client-side), v2.24 (Week 25 automatische import, diëtist-week 7 = kalenderweek 25, ma 15 t/m zo 21 juni 2026; eerste testrun auto-import vanuit Gmail/Drive: 7 diners + 35 solo-meals + 56 week_meal-koppelingen, macros via NEVO in `outputs/week25_macros.xlsx`, 972 meals actief), v2.23 (week 23 import + image_url-backfill), v2.22 (week 22 import).
 
 Versies in volgorde:
 - v0.1 fundament en design tokens — klaar
@@ -39,6 +39,8 @@ Versies in volgorde:
 - v2.8 meals.image_url + re-scrape Recipe.image (418/464 dekking); meal-card toont foto met lazy-load en no-referrer — klaar
 - v2.22 Week 22 import (25-31 mei): 7 nieuwe diners + 34 solo-meals + 56 week_meal-koppelingen. Macros voor het eerst zelf berekend uit NEVO-database in plaats van compute_meal_macros() — xlsx-rapport met formules voor narekenen — klaar
 - v2.25 Filterbalk in de maaltijd-picker (kies-modus): keuken, hoofdingrediënt, max kooktijd, dieet, kookwijze, favoriet + resultaatteller + wis-knop; inklapbaar, mobielvriendelijk, logica gespiegeld aan Bibliotheek — klaar
+- v2.26 Type-knoppen in de picker (Ontbijt/Lunch/Diner/Tussendoor, omzetbaar, default = categorie van de cel) + terugdraaien bij auto-genereren (snapshot vóór genereren, herstel-knop in resultaatscherm) + correctie 11 misgeclassificeerde ontbijt-meals — klaar
+- v2.27 Inplannen vanuit de Bibliotheek: 📅-knop op kaart en lijst-rij opent meal-scheduler.js (weekraster met bestaande planning, persoon + beiden-vinkje, week-navigatie, cel aanklikken plaatst gerecht, week wordt zo nodig als eigen week aangemaakt) — klaar
 
 ## Architectuur
 

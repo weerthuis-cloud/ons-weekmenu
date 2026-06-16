@@ -58,6 +58,21 @@ const PICKER_KOOKTIJD = [
   ['60', '≤ 60 min', (t) => t != null && t <= 60],
 ];
 
+// v2.26: type-buckets voor de keuzeknoppen in kies-modus. Tussendoor = alle snack-types samen.
+const TYPE_BUCKETS = [
+  ['ontbijt',    'Ontbijt',    ['ontbijt']],
+  ['lunch',      'Lunch',      ['lunch']],
+  ['diner',      'Diner',      ['diner']],
+  ['tussendoor', 'Tussendoor', ['snack_ochtend', 'snack_middag', 'snack_avond']],
+];
+function bucketForSlot(slot) {
+  return (slot === 'ontbijt' || slot === 'lunch' || slot === 'diner') ? slot : 'tussendoor';
+}
+function typesForBucket(bucket) {
+  const b = TYPE_BUCKETS.find(x => x[0] === bucket);
+  return b ? b[2] : [];
+}
+
 // v2.25: lege/begin-staat voor de filters in kies-modus.
 function emptyFilters() {
   return { dieet: new Set(), kookwijze: new Set(), cuisine: '', hoofd: '', maxTijd: '', favoriet: false };
@@ -69,6 +84,7 @@ const ui = {
   open: false,
   mode: 'pick',     // 'pick' | 'create' | 'edit'
   slot: null,       // 'ontbijt' | etc.
+  typeBucket: null, // v2.26: gekozen type-bucket in kies-modus (ontbijt/lunch/diner/tussendoor)
   editing: null,    // meal-row in edit-modus
   search: '',
   filters: emptyFilters(),  // v2.25: extra filters in kies-modus
@@ -103,6 +119,7 @@ export async function openMealPicker({ slot, suggestedSuitableFor = 'beiden', on
   ui.slot = slot;
   ui.editing = null;
   ui.search = '';
+  ui.typeBucket = bucketForSlot(slot);
   ui.filters = emptyFilters();
   ui.filtersOpen = false;
   ui.error = null;
@@ -272,8 +289,9 @@ function view() {
   if (!ui.open) return null;
   const slotInfo = SLOT_BY_ID[ui.slot];
   const term = ui.search.trim().toLowerCase();
-  // Filter eerst op slot-type: bij ontbijt-cell alleen ontbijt-meals.
-  const slotMatched = ui.slot ? ui.meals.filter(m => m.type === ui.slot) : ui.meals;
+  // v2.26: filter op gekozen type-bucket (default = bucket van de geopende slot, omzetbaar).
+  const bucketTypes = ui.typeBucket ? typesForBucket(ui.typeBucket) : null;
+  const slotMatched = bucketTypes ? ui.meals.filter(m => bucketTypes.includes(m.type)) : ui.meals;
   const byTerm = term
     ? slotMatched.filter(m => m.name.toLowerCase().includes(term))
     : slotMatched;
@@ -306,6 +324,12 @@ function view() {
             @input=${(e) => { ui.search = e.target.value; rerender(); }}
             autofocus
           />
+
+          <div class="mp-types" role="group" aria-label="Type maaltijd">
+            ${TYPE_BUCKETS.map(([id, label]) => html`
+              <button type="button" class="mp-type ${ui.typeBucket === id ? 'is-on' : ''}"
+                @click=${() => { ui.typeBucket = id; rerender(); }}>${label}</button>`)}
+          </div>
 
           <div class="mp-filterbar">
             <button type="button" class="mp-filtertoggle ${nActive ? 'is-on' : ''}"
@@ -594,6 +618,17 @@ function view() {
       .mp-meal:hover { background: var(--bg-3); }
       .name { font-weight: 600; }
       .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-3); flex-wrap: wrap; }
+
+      /* v2.26: type-keuzeknoppen in kies-modus */
+      .mp-types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      .mp-type {
+        font: inherit; font-size: 13px; cursor: pointer;
+        background: var(--bg-2); border: 1px solid var(--line);
+        border-radius: var(--r-md); padding: 9px 6px; color: var(--ink-2);
+        text-align: center;
+      }
+      .mp-type:hover { background: var(--bg-3); }
+      .mp-type.is-on { background: var(--ink); border-color: var(--ink); color: var(--bg); font-weight: 600; }
 
       /* v2.25: filterbalk in kies-modus */
       .mp-filterbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

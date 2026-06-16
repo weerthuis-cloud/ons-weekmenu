@@ -1405,3 +1405,27 @@ NB: dit is een ruwe SQL-aggregatie zonder de `normalizeName`/aliassen/cross-unit
 **Verificatie.** node --check groen; vite build in schone sandbox-kopie (97 modules, geen fouten); losse logica-test van het filterpredicaat (7 cases, allemaal groen).
 
 **Open punt (los van deze taak).** Aperol Spritz en Aardbeien tiramisu verschijnen onder het ontbijt-slot in de picker → die meals staan met `type='ontbijt'` in de DB, waarschijnlijk verkeerd geclassificeerd. Apart nakijken indien gewenst.
+
+**Opgelost (16 juni 2026): misgeclassificeerde ontbijt-meals.** Bulk-scrape van Miljuschka's ontbijt-categorie had drankjes/nagerechten/hartige gerechten als `type='ontbijt'` binnengehaald. 11 gecorrigeerd: Aperol Spritz + Espresso Martini mocktail soft-deleted (geen maaltijd); Aardbeien tiramisu, Feestelijke Paascheesecake, paastrifle, Tompouce bammetje, Panna cotta met espresso granola → snack_avond; Tomatencrèmesoep + quiche Lorraine → diner; Slaschuitjes met krabsalade → lunch; Augurkendip → snack_middag. Pre-change snapshot in backups/ontbijt_reclassificatie_pre_v2.25.json. Let op: exact-match op naam faalde voor de panna cotta door een afwijkend teken in de string; via id opgelost. Resterende ~152 ontbijt-meals zijn legitiem (twijfelgevallen als croque/crêpes/eiersalade bewust als brunch-ontbijt gelaten).
+
+## v2.26 — type-knoppen in picker + terugdraaien auto-genereren (16 juni 2026)
+
+**Type-knoppen in de picker.** De harde, onzichtbare slot-prefilter in kies-modus is vervangen door een instelbare type-bucket met vier altijd zichtbare knoppen: Ontbijt, Lunch, Diner, Tussendoor. Tussendoor = snack_ochtend + snack_middag + snack_avond samen. Default = `bucketForSlot(ui.slot)`; omzetbaar. Het gekozen week_meals.slot blijft het slot van de cel, los van het meal-type (je mag dus bewust een snack in een ontbijt-slot zetten). Constanten TYPE_BUCKETS + helpers bucketForSlot/typesForBucket in meal-picker.js.
+
+**Terugdraaien bij auto-genereren.** Bewust gekozen voor snapshot-restore i.p.v. botte "leeg alles": data.js `snapshotWeek(ownerId,year,week)` (rows zonder meal-join: day/slot/meal_id/porties/rating; weekId mag null zijn als week nog niet bestaat) en `restoreWeekSnapshot(snap)` (resolve weekId vers indien null, delete alle week_meals, re-insert snapshot; lege snapshot => week leeg). auto-generate.js maakt vóór de generate-loop een snapshot per persoon en toont in het resultaatscherm een "↩ Terugdraaien (leeg week)"-knop. Voordeel: genereren bovenop een gevulde diëtist-week kan veilig teruggedraaid worden zonder die maaltijden te slopen.
+
+**Verificatie.** node --check op 3 bestanden; vite build schone kopie (geen fouten); 8 logica-tests (type-bucket-mapping + snapshot/restore-vorm) groen.
+
+**Niet gepusht door mij.** Sandbox heeft geen GitHub-auth; Peter pusht zelf vanuit de projectmap (`git push origin main`) om de Pages-deploy te triggeren. De DB-correcties (v2.25-sessie) staan al live in Supabase, los van git.
+
+## v2.27 — inplannen vanuit de Bibliotheek (16 juni 2026)
+
+**Wens.** Vanuit de Bibliotheek een gerecht inplannen: klik → kies week → inline weekraster met alle bestaande planningen → klik de cel waar je het gerecht wilt. Plaatsing-knop bewust apart van de naam-klik (die opent nog steeds de editor).
+
+**Bouw.** Nieuwe component `components/meal-scheduler.js` (overlay, zelfde modal-patroon als picker/auto-generate). Bevat: persoon-toggle Peter/Miranda + vinkje "ook voor de ander" (mirror naar beide weken), week-navigatie ← → (default huidige week via todayInfo), en een grid van 7 dagen (kolommen) × 6 slots (rijen) met bestaande week_meals. Cel aanklikken roept setWeekMeal aan; week wordt via addWeek(source:'eigen') aangemaakt als die nog niet bestaat (zelfde patroon als week.js openPicker). Slot-rij die matcht met meal.type wordt gemarkeerd als suggestie, maar elke cel is klikbaar. Modal blijft open na plaatsen zodat je meerdere dagen kunt vullen.
+
+**Koppeling.** MealCard kreeg een prop `onSchedule` (rendert 📅-knop rechtsonder op de kaart). In `views/build.js`: grid-kaart krijgt onSchedule, lijst-rij krijgt een 📅-span naast de favoriet-ster. Beide openen openMealScheduler({meal}).
+
+**Verificatie.** node --check op 3 bestanden; vite build schone kopie zonder fouten; 9 logica-tests (week-navigatie incl. jaargrens, cel-matching, beiden-targets, suggest-highlight) groen.
+
+**Niet gepusht door mij** (sandbox zonder GitHub-auth). Peter pusht zelf vanuit de projectmap.

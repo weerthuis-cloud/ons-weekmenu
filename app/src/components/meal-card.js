@@ -5,7 +5,7 @@ import { hueForSlot, chipForSlot, SLOT_VISUAL } from '../lib/cat.js';
 
 const HEIGHTS = { sm: 78, md: 104, lg: 160 };
 
-export function MealCard({ meal, size = 'md', onClick = null, showMacros = false, badge = null, onToggleFavoriet = null }) {
+export function MealCard({ meal, size = 'md', onClick = null, showMacros = false, badge = null, onToggleFavoriet = null, onSchedule = null }) {
   if (!meal) return null;
   const hue = hueForSlot(meal.type) ?? 80;
   const chip = chipForSlot(meal.type);
@@ -36,6 +36,10 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
             @click=${(e) => { e.stopPropagation(); onToggleFavoriet(meal); }}>
             ${meal.favoriet ? '★' : '☆'}
           </span>
+        ` : nothing}
+        ${onSchedule ? html`
+          <span class="mc-plan" title="Inplannen in een week"
+            @click=${(e) => { e.stopPropagation(); onSchedule(meal); }}>📅</span>
         ` : nothing}
       </div>
       <div class="mc-meta">
@@ -101,6 +105,14 @@ export function MealCard({ meal, size = 'md', onClick = null, showMacros = false
       }
       .mc-fav:hover { transform: scale(1.2); color: oklch(75% 0.18 70); }
       .mc-fav.is-on { color: oklch(72% 0.16 70); }
+      .mc-plan {
+        position: absolute; bottom: 6px; right: 8px;
+        font-size: 15px; line-height: 1; cursor: pointer; user-select: none;
+        background: oklch(100% 0 0 / 0.85); border-radius: 999px;
+        width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 3px oklch(0% 0 0 / 0.25); transition: transform .15s ease;
+      }
+      .mc-plan:hover { transform: scale(1.12); }
       .mc-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
       .mc-meta .chip { height: 20px; font-size: 11px; padding: 0 8px; }
       .mc-name { margin-top: 4px; font-weight: 600; line-height: 1.25; color: var(--ink); }

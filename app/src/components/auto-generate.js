@@ -2,7 +2,7 @@
 // Geopend via knop in WeekView. Filters: dieet multi, cuisine, max kooktijd.
 
 import { html, render } from 'lit-html';
-import { generateWeekMenu, listProfiles } from '../lib/data.js';
+import { generateWeekMenu, listProfiles, snapshotWeek, restoreWeekSnapshot } from '../lib/data.js';
 
 const HOST_ID = '__autogen_host';
 
@@ -23,6 +23,9 @@ const ui = {
   busy: false,
   result: null,
   error: null,
+  snapshots: [],    // v2.26: [{ slug, snap }] vóór genereren, voor terugdraaien
+  undoBusy: false,  // v2.26
+  undone: false,    // v2.26: snapshot is teruggezet
 };
 
 function ensureHost() {
@@ -43,10 +46,27 @@ export function openAutoGenerate({ year, week, persoon, onDone }) {
   ui.filters = { dieet: new Set(), cuisine: '', maxBereidingstijd: '', alleenFavoriet: false };
   ui.opties = { behoudBestaande: false, metSnacks: false, macroAware: true, perMacroTargets: false, cuisineVariatie: true };
   ui.busy = false; ui.result = null; ui.error = null;
+  ui.snapshots = []; ui.undoBusy = false; ui.undone = false;
   rerender();
 }
 
 function close() { ui.open = false; ui.result = null; rerender(); }
+
+// v2.26: zet alle betrokken weken terug naar de snapshot van vóór het genereren.
+// Bij een week die vooraf leeg was, betekent dat: helemaal leeg.
+async function undo() {
+  if (!ui.snapshots.length || ui.undoBusy) return;
+  ui.undoBusy = true; ui.error = null; rerender();
+  try {
+    for (const s of ui.snapshots) await restoreWeekSnapshot(s.snap);
+    ui.undone = true;
+    if (ui.ctx?.onDone) ui.ctx.onDone();
+  } catch (err) {
+    ui.error = err.message;
+  } finally {
+    ui.undoBusy = false; rerender();
+  }
+}
 
 function toggleDieet(d) {
   if (ui.filters.dieet.has(d)) ui.filters.dieet.delete(d);
@@ -67,6 +87,13 @@ async function submit() {
       alleenFavoriet: ui.filters.alleenFavoriet,
     };
     const opties = { ...ui.opties };
+    // v2.26: snapshot per persoon vóór genereren, zodat we kunnen terugdraaien.
+    ui.snapshots = [];
+    for (const slug of targets) {
+      const p = profiles[slug];
+      if (!p) continue;
+      ui.snapshots.push({ slug, snap: await snapshotWeek(p.id, ui.ctx.year, ui.ctx.week) });
+    }
     const results = [];
     for (const slug of targets) {
       const p = profiles[slug];
@@ -75,6 +102,7 @@ async function submit() {
       results.push({ slug, ...r });
     }
     ui.result = results;
+    ui.undone = false;
     if (ui.ctx.onDone) ui.ctx.onDone();
   } catch (err) {
     ui.error = err.message;
@@ -168,6 +196,7 @@ function view() {
                 <p>${r.slug}: <strong>${r.inserted}</strong> maaltijden geplaatst (pool van ${r.poolSize} recepten${r.kcalDoel ? `, kcal-doel ${r.kcalDoel}` : ''}).
                 ${r.stats?.mismatch?.length ? html`<br><span class="warn">⚠ niet gevuld: ${r.stats.mismatch.join(', ')}</span>` : ''}</p>
               `)}
+              ${ui.undone ? html`<p class="undone-note">↩ Teruggedraaid: de week staat weer zoals vóór het genereren.</p>` : ''}
             </div>
           ` : ''}
 
@@ -178,7 +207,9 @@ function view() {
           <button class="btn ghost" @click=${close}>${ui.result ? 'klaar' : 'annuleer'}</button>
           ${!ui.result ? html`
             <button class="btn" @click=${submit} ?disabled=${ui.busy}>${ui.busy ? 'Genereren…' : 'Genereer week'}</button>
-          ` : ''}
+          ` : (ui.undone ? '' : html`
+            <button class="btn ghost danger" @click=${undo} ?disabled=${ui.undoBusy}>${ui.undoBusy ? 'Terugdraaien…' : '↩ Terugdraaien (leeg week)'}</button>
+          `)}
         </footer>
       </div>
 
@@ -201,6 +232,9 @@ function view() {
         .warn { color: oklch(45% 0.12 50); font-size: 12px; }
         .err { background: var(--tomato-tint); color: oklch(40% 0.14 28); padding: 10px 14px; border-radius: var(--r-md); font-size: 14px; }
         .ag-foot { padding: 14px 22px 18px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
+        .btn.ghost.danger { color: oklch(40% 0.14 28); border-color: oklch(85% 0.08 28); }
+        .btn.ghost.danger:hover { background: var(--tomato-tint); }
+        .undone-note { color: oklch(45% 0.10 150); font-size: 13px; margin-top: 8px !important; }
       </style>
     </div>
   `;

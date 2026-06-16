@@ -205,6 +205,44 @@ export async function duplicateWeekMeals(srcWeekId, dstWeekId) {
   return data;
 }
 
+// v2.26: snapshot van een week, voor terugdraaien na auto-genereren.
+// weekId kan null zijn als de week nog niet bestaat (wordt dan bij genereren aangemaakt).
+export async function snapshotWeek(ownerId, year, week) {
+  const w = await getWeek(ownerId, year, week);
+  if (!w) return { ownerId, year, week, weekId: null, rows: [] };
+  const meals = await getWeekMeals(w.id);
+  const rows = meals.map(m => ({ day: m.day, slot: m.slot, meal_id: m.meal_id, porties: m.porties, rating: m.rating }));
+  return { ownerId, year, week, weekId: w.id, rows };
+}
+
+// v2.26: zet een week terug naar een eerder gemaakte snapshot.
+// Lege snapshot => de week wordt leeggemaakt (alle week_meals weg).
+export async function restoreWeekSnapshot(snap) {
+  if (!snap) return;
+  let weekId = snap.weekId;
+  if (!weekId) {
+    // Week bestond niet bij snapshot; vers opzoeken (kan inmiddels door genereren zijn aangemaakt).
+    const { data, error } = await supabase
+      .from('weeks').select('id')
+      .eq('owner', snap.ownerId).eq('year', snap.year).eq('week_nr', snap.week)
+      .maybeSingle();
+    if (error) throw error;
+    weekId = data?.id || null;
+  }
+  if (!weekId) return; // niets te herstellen
+  const { error: delErr } = await supabase.from('week_meals').delete().eq('week_id', weekId);
+  if (delErr) throw delErr;
+  if (snap.rows?.length) {
+    const inserts = snap.rows.map(r => ({
+      week_id: weekId, day: r.day, slot: r.slot, meal_id: r.meal_id, porties: r.porties, rating: r.rating,
+    }));
+    const { error: insErr } = await supabase.from('week_meals').insert(inserts);
+    if (insErr) throw insErr;
+  }
+  cache.weekMeals.delete(weekId);
+  notify('week_meals');
+}
+
 export async function addWeek({ ownerId, year, week, source = 'eigen', notitie = null }) {
   const { data, error } = await supabase
     .from('weeks')

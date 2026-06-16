@@ -7,6 +7,7 @@ import { html, nothing } from 'lit-html';
 import { listMeals, listMealRatings, setMealFavoriet, onDataChange } from '../lib/data.js';
 import { SLOTS, SLOT_BY_ID } from '../lib/slots.js';
 import { openMealEditor, openMealCreator } from '../components/meal-picker.js';
+import { openMealScheduler } from '../components/meal-scheduler.js';
 import { MealCard } from '../components/meal-card.js';
 import { SlotIcon } from '../components/slot-icon.js';
 import { rerender } from '../main.js';
@@ -593,6 +594,7 @@ export function BuildView(state) {
                 return html`
                   <button class="ml-row" @click=${() => openMealEditor({ meal: m, onSaved: () => loadAll() })}>
                     <span class="ml-fav ${m.favoriet ? 'is-on' : ''}" @click=${(e) => { e.stopPropagation(); toggleFavoriet(m); }}>${m.favoriet ? '★' : '☆'}</span>
+                    <span class="ml-plan" title="Inplannen in een week" @click=${(e) => { e.stopPropagation(); openMealScheduler({ meal: m }); }}>📅</span>
                     <span class="ml-name">
                       ${m.name}
                       ${match ? html`<span class="match-pill">${Math.round(match.score*100)}%</span>` : ''}
@@ -620,6 +622,7 @@ export function BuildView(state) {
                       showMacros: true,
                       onClick: () => openMealEditor({ meal: m, onSaved: () => loadAll() }),
                       onToggleFavoriet: toggleFavoriet,
+                      onSchedule: (meal) => openMealScheduler({ meal }),
                     })}
                     ${match ? html`
                       <div class="match-strip">
@@ -721,6 +724,8 @@ export function BuildView(state) {
       .ml-fav { font-size: 16px; line-height: 1; cursor: pointer; color: oklch(70% 0.04 60); }
       .ml-fav.is-on { color: oklch(72% 0.16 70); }
       .ml-fav:hover { transform: scale(1.15); }
+      .ml-plan { font-size: 15px; line-height: 1; cursor: pointer; user-select: none; opacity: 0.75; }
+      .ml-plan:hover { transform: scale(1.15); opacity: 1; }
       .ml-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ml-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       .ml-meta .cmt { font-size: 11px; }
