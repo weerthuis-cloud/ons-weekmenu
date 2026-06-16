@@ -20,6 +20,17 @@ function emptyIngredient() {
   return { name: '', qty: '', unit: '' };
 }
 
+// v2.30: bereidingswijze opdelen in stappen (per regel, of per "1. 2. 3." op één regel).
+function parseSteps(text) {
+  if (!text) return [];
+  const t = String(text).trim();
+  if (!t) return [];
+  const parts = t.includes('\n') ? t.split(/\n+/) : t.split(/\s*(?=\d+[.)]\s)/);
+  return parts
+    .map(s => s.replace(/^\s*\d+[.)]\s*/, '').replace(/^[-•]\s*/, '').trim())
+    .filter(Boolean);
+}
+
 function mealToDraft(meal, fallbackSlot = '') {
   return {
     name: meal?.name ?? '',
@@ -90,6 +101,7 @@ const ui = {
   search: '',
   filters: emptyFilters(),  // v2.25: extra filters in kies-modus
   filtersOpen: false,       // v2.25: inklapbare filterbalk
+  recipeEdit: false,        // v2.30: bereidingswijze in tekstvak (true) of als lijst (false)
   meals: [],
   onPick: null,
   onSaved: null,    // edit-callback
@@ -146,6 +158,7 @@ export function openMealEditor({ meal, onSaved }) {
   ui.onPick = null;
   ui.onSaved = onSaved;
   ui.draft = mealToDraft(meal);
+  ui.recipeEdit = !meal.recipe;  // bestaand recept: toon als lijst; leeg: meteen typen
   rerender();
 }
 
@@ -160,6 +173,7 @@ export function openMealCreator({ defaultType = 'ontbijt', onSaved } = {}) {
   // Wanneer onPick null is en mode='create', behandel save als 'add then close+notify'
   ui.onPick = onSaved ? ((meal) => onSaved(meal)) : null;
   ui.draft = { name: '', kcal: '', type: defaultType, bereidingstijd: '', cuisine: '', hoofdingredient: '', kookwijze: [], dieet: [], recipe: '', description: '', source_url: '', image_url: '', suitable_for: ['beiden'], ingredients: [emptyIngredient()] };
+  ui.recipeEdit = true;
   rerender();
 }
 
@@ -406,7 +420,7 @@ function view() {
               </li>
             `)}
           </ul>
-          <button class="btn" @click=${() => { ui.mode = 'create'; rerender(); }}>+ nieuwe maaltijd</button>
+          <button class="btn" @click=${() => { ui.mode = 'create'; ui.recipeEdit = true; rerender(); }}>+ nieuwe maaltijd</button>
         ` : html`
           <form @submit=${saveDraft}>
             ${isEdit ? html`
@@ -453,14 +467,26 @@ function view() {
                 </div>
                 <button type="button" class="btn ghost small" @click=${addIngredientRow}>+ rij</button>
               </fieldset>
-              <label class="mp-recipe">
-                Bereidingswijze <span class="hint">(elke stap op een nieuwe regel)</span>
-                <textarea class="recipe-area"
-                  placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
-                  .value=${ui.draft.recipe}
-                  ${ref((el) => el && requestAnimationFrame(() => autoGrow(el)))}
-                  @input=${(e) => { ui.draft.recipe = e.target.value; autoGrow(e.target); }}></textarea>
-              </label>
+              <div class="mp-recipe">
+                <div class="mp-recipe-head">
+                  <span>Bereidingswijze <span class="hint">(elke stap op een nieuwe regel)</span></span>
+                  ${ui.recipeEdit
+                    ? html`<button type="button" class="mp-recipe-toggle" @click=${() => { ui.recipeEdit = false; rerender(); }}>als lijst</button>`
+                    : html`<button type="button" class="mp-recipe-toggle" @click=${() => { ui.recipeEdit = true; rerender(); }}>bewerken</button>`}
+                </div>
+                ${ui.recipeEdit
+                  ? html`<textarea class="recipe-area"
+                      placeholder="1. Verhit de olie in een pan...&#10;2. Voeg de kip toe en bak 5 min..."
+                      .value=${ui.draft.recipe}
+                      ${ref((el) => el && requestAnimationFrame(() => autoGrow(el)))}
+                      @input=${(e) => { ui.draft.recipe = e.target.value; autoGrow(e.target); }}></textarea>`
+                  : (() => {
+                      const steps = parseSteps(ui.draft.recipe);
+                      return steps.length
+                        ? html`<ol class="mp-steps">${steps.map((s, i) => html`<li><span class="mp-stepn">${i + 1}.</span><span>${s}</span></li>`)}</ol>`
+                        : html`<button type="button" class="mp-steps-empty" @click=${() => { ui.recipeEdit = true; rerender(); }}>+ bereidingswijze toevoegen</button>`;
+                    })()}
+              </div>
             </div>
 
             <div class="row">
@@ -585,7 +611,7 @@ function view() {
         background: var(--bg);
         border-radius: var(--r-lg);
         padding: 22px;
-        width: 100%; max-width: 520px;
+        width: 100%; max-width: 1040px;
         max-height: 90vh; overflow-y: auto;
         display: flex; flex-direction: column; gap: 14px;
         box-shadow: 0 20px 60px oklch(18% 0.02 60 / 0.3);
@@ -709,10 +735,18 @@ function view() {
       /* v2.28: plan-knop boven + twee-koloms kook-layout */
       .mp-planrow { display: flex; justify-content: flex-end; }
       .mp-planbtn { display: inline-flex; align-items: center; gap: 6px; }
-      .mp-cook { display: grid; grid-template-columns: 1fr 1.25fr; gap: 14px; align-items: start; }
-      .mp-cook .mp-recipe { display: flex; flex-direction: column; gap: 4px; }
+      .mp-cook { display: grid; grid-template-columns: 0.85fr 1.4fr; gap: 20px; align-items: start; }
+      .mp-cook .mp-recipe { display: flex; flex-direction: column; gap: 6px; }
       .mp-cook .recipe-area { min-height: 200px; }
       .mp-cook .ing-rows { max-height: none; }
+      .mp-recipe-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; color: var(--ink-2); }
+      .mp-recipe-toggle { font: inherit; font-size: 12px; background: none; border: none; color: var(--ink-3); cursor: pointer; text-decoration: underline; padding: 0; }
+      .mp-recipe-toggle:hover { color: var(--ink); }
+      .mp-steps { list-style: none; margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); display: flex; flex-direction: column; gap: 9px; }
+      .mp-steps li { display: flex; gap: 10px; font-size: 14px; line-height: 1.55; }
+      .mp-stepn { flex: 0 0 20px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+      .mp-steps-empty { font: inherit; font-size: 13px; text-align: left; color: var(--ink-3); background: var(--bg); border: 1px dashed var(--line-2); border-radius: var(--r-md); padding: 12px 14px; cursor: pointer; }
+      .mp-steps-empty:hover { border-color: var(--ink-2); color: var(--ink-2); }
       @media (max-width: 560px) {
         .mp-cook { grid-template-columns: 1fr; }
       }
@@ -720,11 +754,11 @@ function view() {
       .ing-rows { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
       .ing-row {
         display: grid;
-        grid-template-columns: minmax(0, 2.2fr) 60px 90px 28px;
-        gap: 4px;
+        grid-template-columns: minmax(0, 1fr) 56px 100px 30px;
+        gap: 6px;
         align-items: center;
       }
-      .ing-row input, .ing-row select { padding: 6px 8px; font-size: 12px; }
+      .ing-row input, .ing-row select { padding: 6px 8px; font-size: 12px; min-width: 0; }
       .ing-x {
         font: inherit; background: var(--bg-2); border: 1px solid var(--line);
         border-radius: var(--r-sm); cursor: pointer; padding: 4px 6px; color: var(--ink-3);
@@ -733,7 +767,7 @@ function view() {
       .btn.ghost.danger { color: oklch(40% 0.14 28); border-color: oklch(85% 0.08 28); }
       .btn.ghost.danger:hover { background: var(--tomato-tint); }
       @media (max-width: 480px) {
-        .ing-row { grid-template-columns: 1fr 50px 70px 28px; }
+        .ing-row { grid-template-columns: minmax(0, 1fr) 48px 84px 26px; gap: 4px; }
       }
     </style>
   `;

@@ -1447,3 +1447,13 @@ NB: dit is een ruwe SQL-aggregatie zonder de `normalizeName`/aliassen/cross-unit
 **Verificatie.** node --check groen; vite build schone kopie zonder fouten.
 
 **Niet gepusht door mij** (sandbox zonder GitHub-auth). Staat lokaal als v2.29 klaar.
+
+## v2.30 — bredere editor + ingesprongen bereidingslijst (16 juni 2026)
+
+**Aanleiding.** In de v2.28-editor werd op de smalle modal (max 520px) de naam-kolom van de ingrediënten platgedrukt (alleen hoeveelheid + eenheid zichtbaar). Peter wilde breder, met meer ruimte voor ingrediënten en bereiding, en de opsomming netjes ingesprongen. Drie voorbeelden getoond via visualize-widget.
+
+**Bouw (meal-picker.js).** `.mp-modal` max-width 520px → 1040px. `.mp-cook` kolommen 1fr/1.25fr → 0.85fr/1.4fr (bereiding krijgt meeste ruimte). `.ing-row` kolommen naar minmax(0,1fr) 56px 100px 30px (eenheid breed genoeg voor 'milliliter'), min-width:0 op inputs/selects zodat ze krimpen i.p.v. overflowen. Bereidingswijze: nieuwe state `ui.recipeEdit`; bij bestaand recept default lijst-weergave, bij leeg/nieuw default tekstvak. Lijst = `<ol class="mp-steps">` met hangende inspringing (nummer in eigen kolom van 20px, tekst lijnt onder tekst uit). `parseSteps()` splitst op newlines, anders op `\d+[.)]` markers, strdipt nummers/bullets. Toggle-link "bewerken"/"als lijst" wisselt tekstvak ↔ lijst. Lege bereiding toont "+ bereidingswijze toevoegen".
+
+**Verificatie.** node --check groen; 5 parseSteps-tests groen (incl. kapsalon-case '1. … 2. …' op één regel); vite build schone kopie zonder fouten.
+
+**Niet gepusht door mij** (sandbox zonder GitHub-auth).
