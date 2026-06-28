@@ -541,6 +541,13 @@ export async function setWeekMealRating({ id, weekId, mealId, rating }) {
 // Overschrijft bestaande meal in doel-slot.
 export async function moveWeekMeal({ weekId, fromDay, toDay, slot, mealId, porties = 1.0 }) {
   if (fromDay === toDay) return;
+  // v2.34: bewaar de rating van de te verplaatsen rij zodat de beoordeling met het
+  // gerecht meereist (anders ging die verloren door de delete + insert).
+  const { data: src } = await supabase.from('week_meals')
+    .select('rating')
+    .eq('week_id', weekId).eq('day', fromDay).eq('slot', slot)
+    .maybeSingle();
+  const rating = src?.rating ?? null;
   // Wis bestaande in doel
   await supabase.from('week_meals').delete()
     .eq('week_id', weekId).eq('day', toDay).eq('slot', slot);
@@ -549,7 +556,7 @@ export async function moveWeekMeal({ weekId, fromDay, toDay, slot, mealId, porti
     .eq('week_id', weekId).eq('day', fromDay).eq('slot', slot);
   // Insert in doel
   const { error } = await supabase.from('week_meals').insert({
-    week_id: weekId, day: toDay, slot, meal_id: mealId, porties,
+    week_id: weekId, day: toDay, slot, meal_id: mealId, porties, rating,
   });
   if (error) throw error;
   cache.weekMeals.delete(weekId);
@@ -559,13 +566,20 @@ export async function moveWeekMeal({ weekId, fromDay, toDay, slot, mealId, porti
 // Ruil twee meals binnen dezelfde week + slot-type.
 export async function swapWeekMeals({ weekId, slot, dayA, mealIdA, portiesA, dayB, mealIdB, portiesB }) {
   if (dayA === dayB) return;
+  // v2.34: lees de bestaande ratings uit zodat ze met het gerecht meereizen.
+  // Het gerecht van dayA gaat naar dayB en omgekeerd, dus de rating volgt het gerecht.
+  const { data: rows } = await supabase.from('week_meals')
+    .select('day, rating')
+    .eq('week_id', weekId).eq('slot', slot).in('day', [dayA, dayB]);
+  const ratingA = rows?.find(r => r.day === dayA)?.rating ?? null;
+  const ratingB = rows?.find(r => r.day === dayB)?.rating ?? null;
   await supabase.from('week_meals').delete()
     .eq('week_id', weekId).eq('day', dayA).eq('slot', slot);
   await supabase.from('week_meals').delete()
     .eq('week_id', weekId).eq('day', dayB).eq('slot', slot);
   const { error } = await supabase.from('week_meals').insert([
-    { week_id: weekId, day: dayA, slot, meal_id: mealIdB, porties: portiesB },
-    { week_id: weekId, day: dayB, slot, meal_id: mealIdA, porties: portiesA },
+    { week_id: weekId, day: dayA, slot, meal_id: mealIdB, porties: portiesB, rating: ratingB },
+    { week_id: weekId, day: dayB, slot, meal_id: mealIdA, porties: portiesA, rating: ratingA },
   ]);
   if (error) throw error;
   cache.weekMeals.delete(weekId);
